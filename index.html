@@ -125,11 +125,16 @@ details[open] summary{margin-bottom:8px}
       <div class="st2" id="sst"></div>
 
       <div id="trBox">
+        <div class="lbl">Chế độ dịch</div>
+        <select id="mode" style="margin-bottom:8px">
+          <option value="interp">⚡ Phiên dịch tức thời — phát ngay, giọng Việt trễ vài giây</option>
+          <option value="pre">🪄 Dịch trước — khớp chính xác, chờ lúc đầu</option>
+        </select>
         <div class="row">
-          <button class="pr" id="auto" disabled>🪄 Dịch trực tiếp</button>
+          <button class="pr" id="auto" disabled>🪄 Dịch trước</button>
           <button id="tr" disabled>✨ Dịch phụ đề</button>
         </div>
-        <label class="chk" style="margin-top:6px;font-size:12px"><input type="checkbox" id="autoRun" checked> Tự làm ngay khi chọn video mới</label>
+        <label class="chk" style="margin-top:6px;font-size:12px"><input type="checkbox" id="autoRun" checked> Chế độ Dịch trước: tự làm ngay khi chọn video</label>
         <details style="margin-top:6px">
           <summary>Tuỳ chọn dịch</summary>
           <div class="lbl">Bối cảnh video</div>
@@ -312,7 +317,7 @@ function showSub(i){
 function refresh(){
   const v=P.has(),hc=cues.length>0,hv=cues.some(c=>c.vi);
   const canTr=!!sample||hasSrv();
-  $('play').disabled=!(v&&(hv||live));$('stop').disabled=!v;$('tr').disabled=!(hc&&canTr)||busy;
+  $('play').disabled=!(v&&(hv||live||(modeInterp()&&canInterpret())));$('stop').disabled=!v;$('tr').disabled=!(hc&&canTr)||busy;
   $('auto').disabled=!(v&&srcRef&&hasSrv())||busy;
   $('exp').disabled=!hv;$('cp').disabled=!hv;
   if(!canTr&&!busy)st('tst',inClaude?'':'Muốn tự nghe và dịch video: thiết lập Máy chủ tải video trong thẻ Cài đặt.');
@@ -320,7 +325,7 @@ function refresh(){
 
 /* ===== Trình phát: tệp / link trực tiếp / YouTube ===== */
 const inClaude=!!(window.claude&&window.claude.use);
-let kind=null,yt=null,resuming=false,actx=null,gain=null,graphFor=null,lastT=0,lastW=0;
+let srcNode=null,kind=null,yt=null,resuming=false,actx=null,gain=null,graphFor=null,lastT=0,lastW=0;
 const P={
   has:()=>!!kind,
   time:()=>kind==='yt'?(yt&&yt.getCurrentTime?yt.getCurrentTime()||0:0):video.currentTime,
@@ -336,7 +341,7 @@ const P={
   }
 };
 function onPlay(){if(holdPause)return;if(liveWait&&!resuming){liveWait=false}if(kind==='yt'&&!resuming)reset(P.time());resuming=false;lastW=0;loop()}
-function onPause(){if(!holdPause&&!liveWait)stopSpeech()}
+function onPause(){if(!holdPause&&!liveWait)stopSpeech();if(interp){interp.queue=[];interp.pcm=[];interp.len=0;showText('')}}
 function onEnded(){stopSpeech();showSub(-1)}
 function bindVideo(el){
   el.addEventListener('loadedmetadata',()=>st('vst',`${vname} · ${sh(el.duration)}`,'ok'));
@@ -363,7 +368,7 @@ function ensureGraph(){
   try{
     if(!actx){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;actx=new AC();gain=actx.createGain();gain.connect(actx.destination)}
     if(actx.state==='suspended')actx.resume();
-    if(graphFor!==video){actx.createMediaElementSource(video).connect(gain);graphFor=video}
+    if(graphFor!==video){srcNode=actx.createMediaElementSource(video);srcNode.connect(gain);graphFor=video}
   }catch(e){}
 }
 $('fVideo').onchange=e=>{
@@ -423,6 +428,7 @@ async function dlLink(u){
     const b=await readWithProgress(r,(g,t)=>{fill.style.width=t?15+85*g/t+'%':'60%';show('Đang nhận video '+mb(g)+(t?' / '+mb(t):''))});
     srcRef={url:u};videoKey='u:'+u+':'+Date.now();live=null;liveWait=false;
     useBlob(b,title);show(`${title} · ${mb(b.size)} · bấm 💾 để lưu`,'ok');$('linkBox').classList.add('hide');
+    if(modeInterp()&&canInterpret()){stopInterp();interpReady();refresh();return}
     let gotSubs=false;
     if($('dlSubs').checked){
       st('sst','Đang lấy phụ đề của video…');
@@ -493,11 +499,13 @@ async function loadYT(id){
 }
 $('play').onclick=()=>{
   unlock();ensureGraph();
+  if(modeInterp()&&canInterpret()){if(!interp||interp.key!==videoKey){if(!startInterp())return}}
+  else if(interp)stopInterp();
   if(P.ended())P.seek(0);
   reset(P.time());P.vol(+$('bg').value/100);resuming=true;P.play();
 };
-$('stop').onclick=()=>{holdPause=false;P.pause();stopSpeech()};
-function reset(t){stopSpeech();spoken=new Set(cues.map((c,i)=>c.start<t-0.25?i:-1).filter(i=>i>=0))}
+$('stop').onclick=()=>{holdPause=false;P.pause();stopSpeech();stopInterp();showText('')};
+function reset(t){stopSpeech();if(interp){interp.queue=[];interp.pcm=[];interp.len=0;showText('')}spoken=new Set(cues.map((c,i)=>c.start<t-0.25?i:-1).filter(i=>i>=0))}
 function cueAt(t){let lo=0,hi=cues.length-1,a=-1;while(lo<=hi){const m=(lo+hi)>>1;if(cues[m].start<=t){a=m;lo=m+1}else hi=m-1}return a}
 function loop(){
   cancelAnimationFrame(raf);
@@ -507,8 +515,10 @@ function loop(){
     if(kind==='yt'&&!holdPause&&lastW&&(t<lastT-0.6||t-lastT>(now-lastW)/1000+1.5))reset(t);
     lastT=t;lastW=holdPause?0:now;
     const i=cueAt(t),inside=i>=0&&t<cues[i].end+0.3;
-    hi(inside?i:-1);showSub(speaking>=0?speaking:(inside?i:-1));
-    if(i>=0&&!spoken.has(i)&&t<cues[i].end){spoken.add(i);if(cues[i].vi)onCue(i)}
+    if(!interp){
+      hi(inside?i:-1);showSub(speaking>=0?speaking:(inside?i:-1));
+      if(i>=0&&!spoken.has(i)&&t<cues[i].end){spoken.add(i);if(cues[i].vi)onCue(i)}
+    }
     raf=requestAnimationFrame(tick);
   };raf=requestAnimationFrame(tick);
 }
@@ -597,7 +607,7 @@ function done(i){
   else duck(false);
 }
 function stopSpeech(keep){
-  speaking=-1;if(!keep){pending=-1;holdPause=false}
+  speaking=-1;interpSpeaking=false;if(!keep){pending=-1;holdPause=false}
   try{hasSS&&speechSynthesis.cancel()}catch(e){}try{tts&&tts.stop()}catch(e){}
   if(P.has())duck(false);
 }
@@ -659,7 +669,8 @@ $('tr').onclick=async()=>{busy=true;refresh();try{await translateAll()}finally{b
 /* ===== Tự nghe lời thoại (Groq Whisper qua máy chủ) ===== */
 let srcRef=null,cuesFor=LS.get('ltv_cues',[]).length?'old':null,videoKey=null;
 $('autoRun').checked=LS.get('ltv_autoRun',true);$('autoRun').onchange=()=>LS.set('ltv_autoRun',$('autoRun').checked);
-function newSource(ref,key){srcRef=ref;videoKey=key+':'+Date.now();live=null;liveWait=false;refresh();
+function newSource(ref,key){stopInterp();srcRef=ref;videoKey=key+':'+Date.now();live=null;liveWait=false;refresh();
+  if(modeInterp()&&canInterpret()){interpReady();return}
   if($('autoRun').checked&&hasSrv()&&!(cues.length&&cuesFor===null))autoDub();}
 function xhrUpload(url,form,onP){return new Promise((res,rej)=>{
   const x=new XMLHttpRequest();x.open('POST',url);Object.entries(srvHead()).forEach(([a,b])=>x.setRequestHeader(a,b));
@@ -667,6 +678,94 @@ function xhrUpload(url,form,onP){return new Promise((res,rej)=>{
   x.onload=()=>{let j=null;try{j=JSON.parse(x.responseText)}catch(e){}x.status<300&&j?res(j):rej(new Error(j&&j.detail||('Lỗi máy chủ '+x.status)))};
   x.onerror=()=>rej(new Error('Mất kết nối với máy chủ.'));x.send(form);
 })}
+/* ===== Phiên dịch tức thời: nghe tiếng video đang phát, dịch từng câu ngắn và đọc ngay ===== */
+let interp=null,interpSpeaking=false,interpWatch=0;
+$('mode').value=LS.get('ltv_mode','interp');
+$('mode').onchange=()=>{LS.set('ltv_mode',$('mode').value);stopInterp();showText('');refresh();
+  if(modeInterp()&&canInterpret())interpReady();
+  else if(!modeInterp()&&srcRef&&$('autoRun').checked&&hasSrv()&&!cues.length)autoDub()};
+function modeInterp(){return $('mode').value==='interp'}
+function canInterpret(){return kind==='file'&&!!video&&String(video.src).startsWith('blob:')&&hasSrv()&&!!(window.AudioContext||window.webkitAudioContext)}
+function interpReady(){st('sst','⚡ Sẵn sàng. Bấm ▶ Phát lồng tiếng — app nghe và dịch ngay trong lúc phát.','ok')}
+function showText(vi,src){
+  const s=$('sub');s.textContent='';if(!vi||!$('showSub').checked)return;
+  const a=document.createElement('span');a.textContent=vi;s.append(a);
+  if($('showOrig').checked&&src&&src!==vi){const m=document.createElement('small'),b=document.createElement('span');b.textContent=src;m.append(b);s.append(m)}
+}
+function startInterp(){
+  stopInterp();ensureGraph();
+  if(!actx||graphFor!==video||!srcNode){st('sst','Trình duyệt không cho nghe tiếng của video này. Hãy chuyển sang chế độ Dịch trước.','er');return false}
+  const proc=actx.createScriptProcessor(4096,1,1),mute=actx.createGain();mute.gain.value=0;
+  srcNode.connect(proc);proc.connect(mute);mute.connect(actx.destination);
+  const I={proc,mute,sr:actx.sampleRate,pcm:[],len:0,t0:0,silent:0,seq:0,next:0,results:{},queue:[],prev:[],lang:null,key:videoKey,errors:0};
+  proc.onaudioprocess=e=>onPcm(I,e.inputBuffer.getChannelData(0));
+  interp=I;cues=[];spoken.clear();lastHi=-1;renderCues();refresh();
+  st('sst','⚡ Phiên dịch tức thời: đang nghe…','ok');return true;
+}
+function stopInterp(){
+  if(!interp)return;const I=interp;interp=null;
+  try{I.proc.onaudioprocess=null;srcNode&&srcNode.disconnect(I.proc);I.proc.disconnect();I.mute.disconnect()}catch(e){}
+  interpSpeaking=false;clearTimeout(interpWatch);
+}
+function onPcm(I,data){
+  if(interp!==I||video.paused||video.seeking)return;
+  const r=I.sr/16000,n=Math.floor(data.length/r),out=new Float32Array(n);let e=0;
+  for(let k=0;k<n;k++){const a=Math.floor(k*r),b=Math.min(data.length,Math.floor((k+1)*r));let s=0;for(let j=a;j<b;j++)s+=data[j];const v=s/((b-a)||1);out[k]=v;e+=v*v}
+  const rms=Math.sqrt(e/(n||1)),start=video.currentTime-data.length/I.sr;
+  if(I.len&&Math.abs(start-(I.t0+I.len/16000))>1.2){I.pcm=[];I.len=0} // vừa tua
+  if(!I.len)I.t0=Math.max(0,start);
+  I.pcm.push(out);I.len+=n;I.silent=rms<0.012?I.silent+1:0;
+  const dur=I.len/16000;
+  // cắt ở chỗ ngắt hơi (~0,35 giây im) sau ít nhất 2,5 giây, tối đa 8 giây
+  if((dur>=2.5&&I.silent>=4)||dur>=8)flushInterp(I);
+}
+function flushInterp(I){
+  const len=I.len,t0=I.t0,pcm=I.pcm;I.pcm=[];I.len=0;I.silent=0;
+  let e=0;for(const a of pcm)for(let k=0;k<a.length;k++)e+=a[k]*a[k];
+  if(!len||Math.sqrt(e/len)<0.005)return; // im lặng thì bỏ
+  sendInterp(I,toWav(pcm,len),t0);
+}
+function toWav(parts,len){
+  const b=new ArrayBuffer(44+len*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+len*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,16000,true);v.setUint32(28,32000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,len*2,true);
+  let o=44;for(const a of parts)for(let k=0;k<a.length;k++){const x=Math.max(-1,Math.min(1,a[k]));v.setInt16(o,x<0?x*0x8000:x*0x7fff,true);o+=2}
+  return new Blob([b],{type:'audio/wav'});
+}
+async function sendInterp(I,wav,t0){
+  const seq=I.seq++,fd=new FormData();
+  fd.append('file',wav,'clip.wav');if(I.lang)fd.append('lang',I.lang);
+  fd.append('prev',JSON.stringify(I.prev.slice(-3)));fd.append('tone',$('tone').value);
+  const c=$('ctx').value.trim();if(c)fd.append('context',c);
+  let items=[];
+  try{
+    const r=await fetch(srvBase()+'/api/interpret',{method:'POST',headers:srvHead(),body:fd});
+    if(!r.ok){I.errors++;st('sst','⚡ '+(await srvErr(r)),'er')}
+    else{const j=await r.json();I.errors=0;if(j.language&&!I.lang)I.lang=langCode(j.language);
+      items=(j.items||[]).map(x=>({start:t0+x.start,end:t0+x.end,src:x.src,vi:x.vi||x.src,role:0}))}
+  }catch(e){I.errors++;st('sst','⚡ Mạng chậm, đang thử tiếp…','er')}
+  if(interp!==I)return;
+  I.results[seq]=items;
+  let added=false;
+  while(I.results[I.next]){const it=I.results[I.next];delete I.results[I.next];I.next++;
+    for(const x of it){I.prev.push(x.src);cues.push(x);I.queue.push(x);added=true}}
+  if(added){renderCues();save()}
+  pumpInterp(I);
+}
+function pumpInterp(I){
+  if(interp!==I||interpSpeaking||video.paused)return;
+  if(!I.queue.length){duck(false);return}
+  let c=I.queue.shift();
+  while(I.queue.length&&video.currentTime-c.end>15)c=I.queue.shift(); // tụt quá xa thì bỏ bớt
+  const lag=Math.max(0,video.currentTime-c.start),base=+$('rate').value*styleOf(c.role||0).r;
+  const rate=Math.min(1.9,base*(1+0.15*I.queue.length+(lag>7?0.15:0)));
+  interpSpeaking=true;duck(true,roles[c.role||0]?roles[c.role||0].name:'');showText(c.vi,c.src);hi(cues.indexOf(c));
+  st('sst',`⚡ Phiên dịch tức thời · giọng Việt trễ khoảng ${Math.round(lag)} giây`,'ok');
+  const next=()=>{if(!interpSpeaking)return;interpSpeaking=false;clearTimeout(interpWatch);if(!I.queue.length){duck(false);showText('')}pumpInterp(I)};
+  clearTimeout(interpWatch);interpWatch=setTimeout(next,(c.vi.length/CPS/rate)*1000+4000); // phòng khi trình duyệt không báo đọc xong
+  say(c.vi,c.role||0,rate,next);
+}
+
 /* ===== Tách âm thanh AAC từ MP4/MOV ngay trên máy (không cần tải cả video lên) ===== */
 async function boxAt(file,pos){
   const dv=new DataView(await file.slice(pos,pos+16).arrayBuffer());

@@ -27,7 +27,8 @@ import time
 
 import httpx
 import yt_dlp
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from starlette.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from starlette.background import BackgroundTask
@@ -280,7 +281,7 @@ def whisper(path: str, lang: str | None) -> dict:
     for attempt in range(4):
         with open(path, "rb") as f:
             r = httpx.post(f"{GROQ}/audio/transcriptions", headers={"Authorization": f"Bearer {gkey()}"},
-                           data=data, files={"file": (os.path.basename(path), f, "audio/mpeg")}, timeout=600)
+                           data=data, files={"file": (os.path.basename(path), f, "audio/wav" if path.endswith(".wav") else "audio/mpeg")}, timeout=600)
         if r.status_code == 429:
             time.sleep(float(r.headers.get("retry-after", "10")) + 1)
             continue
@@ -497,6 +498,43 @@ def parse_json_array(text: str):
     return j
 
 
+def build_prompt(items, prev=None, tone=None, context=None, roles=None) -> str:
+    return (
+        "Bạn là biên dịch viên lồng tiếng chuyên nghiệp. Dịch các câu thoại sau sang tiếng Việt để đọc lồng tiếng.\n"
+        f"- Văn phong: {tone or 'tự nhiên, như lời nói đời thường'}.\n"
+        + (f"- Bối cảnh: {context}\n" if context else "")
+        + "- Xưng hô phù hợp, nhất quán. Giữ nguyên tên riêng.\n"
+        "- Mỗi câu phải đọc vừa trong \"sec\" giây (~14 ký tự/giây): ngắn gọn, tự nhiên khi nói.\n"
+        "- Không thêm chú thích. Giữ đúng số câu và id.\n"
+        + (f"- Gán \"role\" là số nhân vật nói câu đó, chọn trong: {roles}. Không rõ thì 0.\n" if roles else "")
+        + (f"Các câu trước (tham khảo): {json.dumps(prev, ensure_ascii=False)}\n" if prev else "")
+        + f"Dữ liệu: {json.dumps(items, ensure_ascii=False)}\n\n"
+        + 'Chỉ trả về JSON dạng {"items":[{"id":số,"vi":"bản dịch"' + (',"role":số' if roles else "") + "}]}."
+    )
+
+
+def translate_items(items, prev=None, tone=None, context=None, roles=None) -> list:
+    prompt = build_prompt(items, prev, tone, context, roles)
+    model = llm_model()
+    for attempt in range(4):
+        r = httpx.post(f"{GROQ}/chat/completions", headers={"Authorization": f"Bearer {gkey()}"}, timeout=120, json={
+            "model": model, "temperature": 0.3,
+            "response_format": {"type": "json_object"},
+            "messages": [{"role": "user", "content": prompt}],
+        })
+        if r.status_code == 429:
+            time.sleep(min(float(r.headers.get("retry-after", "5")) + 0.5, 20))
+            continue
+        if r.status_code >= 400:
+            raise HTTPException(502, f"Groq báo lỗi khi dịch ({r.status_code}): {r.text[:200]}")
+        try:
+            out = parse_json_array(r.json()["choices"][0]["message"]["content"])
+            return [o for o in out if isinstance(o, dict) and "id" in o and "vi" in o]
+        except Exception:
+            continue
+    raise HTTPException(502, "Không dịch được lúc này, thử lại sau.")
+
+
 @app.post("/api/translate")
 async def translate(req: Request):
     auth(req)
@@ -505,38 +543,60 @@ async def translate(req: Request):
     items = body.get("items") or []
     if not items or len(items) > 80:
         raise HTTPException(400, "Mỗi lần dịch từ 1 đến 80 câu.")
-    roles = body.get("roles") or ""
-    prompt = (
-        "Bạn là biên dịch viên lồng tiếng chuyên nghiệp. Dịch các câu thoại sau sang tiếng Việt để đọc lồng tiếng.\n"
-        f"- Văn phong: {body.get('tone') or 'tự nhiên, như lời nói đời thường'}.\n"
-        + (f"- Bối cảnh: {body['context']}\n" if body.get("context") else "")
-        + "- Xưng hô phù hợp, nhất quán. Giữ nguyên tên riêng.\n"
-        "- Mỗi câu phải đọc vừa trong \"sec\" giây (~14 ký tự/giây): ngắn gọn, tự nhiên khi nói.\n"
-        "- Không thêm chú thích. Giữ đúng số câu và id.\n"
-        + (f"- Gán \"role\" là số nhân vật nói câu đó, chọn trong: {roles}. Không rõ thì 0.\n" if roles else "")
-        + (f"Các câu trước (tham khảo): {json.dumps(body.get('prev') or [], ensure_ascii=False)}\n" if body.get("prev") else "")
-        + f"Dữ liệu: {json.dumps(items, ensure_ascii=False)}\n\n"
-        + 'Chỉ trả về JSON dạng {"items":[{"id":số,"vi":"bản dịch"' + (',"role":số' if roles else "") + "}]}."
-    )
-    model = llm_model()
-    for attempt in range(4):
-        async with httpx.AsyncClient(timeout=120) as c:
-            r = await c.post(f"{GROQ}/chat/completions", headers={"Authorization": f"Bearer {gkey()}"}, json={
-                "model": model, "temperature": 0.3,
-                "response_format": {"type": "json_object"},
-                "messages": [{"role": "user", "content": prompt}],
-            })
-        if r.status_code == 429:
-            await __import__("asyncio").sleep(float(r.headers.get("retry-after", "8")) + 1)
-            continue
-        if r.status_code >= 400:
-            raise HTTPException(502, f"Groq báo lỗi khi dịch ({r.status_code}): {r.text[:200]}")
-        try:
-            out = parse_json_array(r.json()["choices"][0]["message"]["content"])
-            return {"items": [o for o in out if isinstance(o, dict) and "id" in o and "vi" in o], "model": model}
-        except Exception:
-            continue
-    raise HTTPException(502, "Không dịch được lúc này, thử lại sau.")
+    key = gkey()
+
+    def run():
+        _cur_key.set(key)
+        return translate_items(items, body.get("prev"), body.get("tone"), body.get("context"), body.get("roles"))
+
+    return {"items": await run_in_threadpool(run)}
+
+
+# Câu Whisper hay "bịa" ra khi đoạn âm thanh gần như im lặng
+HALLU = re.compile(r"(subscribe|đăng ký kênh|cảm ơn các bạn đã (xem|theo dõi)|thanks for watching|thank you for watching|"
+                   r"ご視聴ありがとう|字幕|amara\.org|點贊|订阅)", re.I)
+
+
+@app.post("/api/interpret")
+def interpret(req: Request, file: UploadFile = File(...), lang: str | None = Form(None), prev: str | None = Form(None),
+              tone: str | None = Form(None), context: str | None = Form(None)):
+    """Phiên dịch tức thời: nhận một đoạn âm thanh ngắn (vài giây), trả về lời gốc + bản dịch."""
+    auth(req)
+    need_groq(req)
+    tmp = tempfile.mkdtemp(prefix="itp_")
+    try:
+        path = os.path.join(tmp, "clip" + (os.path.splitext(file.filename or "")[1] or ".wav"))
+        data = file.file.read(30 * 1024 * 1024)
+        with open(path, "wb") as f:
+            f.write(data)
+        out = whisper(path, lang or None)
+        language = out.get("language")
+        segs = []
+        for s in out.get("segments") or []:
+            t = (s.get("text") or "").strip()
+            if not t or s.get("no_speech_prob", 0) > 0.6 or s.get("avg_logprob", 0) < -1.2 or HALLU.search(t):
+                continue
+            segs.append({"start": round(s["start"], 2), "end": round(s["end"], 2), "src": t})
+        if not segs:
+            return {"language": language, "items": []}
+        is_vi = (lang or "").startswith("vi") or str(language).lower() in ("vi", "vietnamese")
+        if is_vi:
+            for s in segs:
+                s["vi"] = s["src"]
+        else:
+            try:
+                prev_list = json.loads(prev) if prev else None
+            except ValueError:
+                prev_list = None
+            items = [{"id": i, "sec": round(s["end"] - s["start"], 1), "text": s["src"]} for i, s in enumerate(segs)]
+            for o in translate_items(items, prev_list, tone, context):
+                if 0 <= int(o["id"]) < len(segs):
+                    segs[int(o["id"])]["vi"] = str(o["vi"]).strip()
+            for s in segs:
+                s.setdefault("vi", s["src"])
+        return {"language": language, "items": segs}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 @app.exception_handler(HTTPException)

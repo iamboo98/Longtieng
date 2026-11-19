@@ -44,7 +44,14 @@ Cài tiện ích **Tampermonkey** cho Chrome / Edge / Firefox, rồi mở link �
 - Trên iPhone, Safari không cho chỉnh nhỏ âm gốc, nên khi đang đọc âm gốc sẽ tắt hẳn.
 - Video không có phụ đề (kể cả phụ đề tự động) thì chưa lồng tiếng được.
 
-## Dịch trực tiếp khi xem (không cần phụ đề)
+## ⚡ Phiên dịch tức thời
+Chế độ mặc định khi chọn video từ máy (hoặc video tải qua máy chủ): bấm **▶ Phát lồng tiếng** là video chạy ngay. App nghe tiếng video đang phát, cắt theo chỗ ngắt câu (2,5–8 giây), gửi đoạn ngắn lên máy chủ để Groq nghe + dịch, rồi đọc giọng Việt ngay — giống phiên dịch viên, trễ khoảng 3–5 giây so với lời gốc. Không tải trước, không chờ, không dừng giữa chừng.
+
+Tiện ích YouTube có cùng chế độ: **Nguồn lời thoại → ⚡ Phiên dịch tức thời**.
+
+Lưu ý: gói miễn phí của Groq tính tối thiểu 10 giây cho mỗi đoạn, đủ cho khoảng 1 giờ phiên dịch mỗi giờ.
+
+## Dịch trước (khớp chính xác)
 Trên bản GitHub Pages, khi bạn chọn video hoặc dán link, app bật **chế độ dịch trực tiếp**:
 1. Máy chủ lấy âm thanh của video (tải tệp lên, hoặc tự tải từ link).
 2. Từng đoạn 25–60 giây được **Groq Whisper** nghe ra lời thoại rồi dịch sang tiếng Việt, luôn đi trước chỗ bạn đang xem khoảng 1 phút.

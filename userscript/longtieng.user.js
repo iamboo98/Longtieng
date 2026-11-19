@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Lồng tiếng Việt cho YouTube
 // @namespace    https://github.com/iamboo98/longtieng
-// @version      1.2.0
+// @version      1.3.0
 // @description  Tự lồng tiếng Việt video YouTube: lấy phụ đề (tự dịch sang tiếng Việt nếu cần) và đọc bằng giọng Việt khớp theo video.
 // @author       iamboo98
 // @match        https://www.youtube.com/*
@@ -181,6 +181,7 @@
     return Math.min(2, need > slot ? base * need / slot : base);
   }
   function setVol(target) {
+    if (gainNode && graphVideo === video) { gainNode.gain.value = Math.min(1, target); return; }
     if (!video || !orig) return;
     if (target >= 0.999) { video.muted = orig.muted; video.volume = orig.volume; return; }
     if (target < 0.03) { video.muted = true; return; }
@@ -189,13 +190,16 @@
     try { video.volume = want; } catch (e) {}
     if (Math.abs(video.volume - want) > 0.02) video.muted = true; // iPhone không cho chỉnh âm lượng: tắt tiếng gốc
   }
+  function speakText(text, rate, cb) {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'vi-VN'; const v = pickVoice(); if (v) { u.voice = v; u.lang = v.lang; }
+    u.rate = Math.min(2, rate); u.pitch = styleOf()[2];
+    u.onend = u.onerror = cb;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }
   function say(i) {
     speaking = i; setVol(cfg.duck); showSub(i);
-    const u = new SpeechSynthesisUtterance(cues[i].text);
-    u.lang = 'vi-VN'; const v = pickVoice(); if (v) { u.voice = v; u.lang = v.lang; }
-    u.rate = rateFor(i); u.pitch = styleOf()[2];
-    u.onend = u.onerror = () => done(i);
-    speechSynthesis.cancel(); speechSynthesis.speak(u);
+    speakText(cues[i].text, rateFor(i), () => done(i));
   }
   function done(i) {
     if (speaking !== i) return;
@@ -273,17 +277,98 @@
   }
   function liveResume() { if (liveWait) { liveWait = false; video && video.play().catch(() => {}); } }
 
+  /* ---------- Phiên dịch tức thời: nghe tiếng video YouTube đang phát ---------- */
+  let actx = null, srcNode = null, gainNode = null, graphVideo = null, interp = null, iSpeaking = false, iWatch = 0;
+  function ensureGraph() {
+    if (graphVideo === video) return true;
+    if (!String(video.src).startsWith('blob:')) return false; // chỉ an toàn với luồng phát của chính YouTube
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+      if (!actx) { actx = new AC(); gainNode = actx.createGain(); gainNode.connect(actx.destination); }
+      if (actx.state === 'suspended') actx.resume();
+      srcNode = actx.createMediaElementSource(video); srcNode.connect(gainNode); graphVideo = video;
+      return true;
+    } catch (e) { return false; }
+  }
+  function startInterp() {
+    if (!cfg.srv.trim()) throw new Error('Phiên dịch tức thời cần Máy chủ: nhập ở mục Máy chủ cuối bảng.');
+    if (!ensureGraph()) throw new Error('Trình duyệt không cho nghe tiếng video này. Chọn nguồn "Phụ đề YouTube" hoặc "Tự nghe bằng máy chủ".');
+    stopInterp();
+    const proc = actx.createScriptProcessor(4096, 1, 1), mute = actx.createGain(); mute.gain.value = 0;
+    srcNode.connect(proc); proc.connect(mute); mute.connect(actx.destination);
+    const I = { proc, mute, sr: actx.sampleRate, pcm: [], len: 0, t0: 0, silent: 0, seq: 0, next: 0, results: {}, queue: [], prev: [], lang: null };
+    proc.onaudioprocess = (e) => onPcm(I, e.inputBuffer.getChannelData(0));
+    interp = I; cues = []; vid = videoId();
+    setStatus('⚡ Phiên dịch tức thời: đang nghe…');
+  }
+  function stopInterp() {
+    if (!interp) return; const I = interp; interp = null;
+    try { I.proc.onaudioprocess = null; srcNode.disconnect(I.proc); I.proc.disconnect(); I.mute.disconnect(); } catch (e) {}
+    iSpeaking = false; clearTimeout(iWatch);
+  }
+  function onPcm(I, data) {
+    if (interp !== I || !video || video.paused || video.seeking) return;
+    const pl = getPlayer(); if (pl && pl.classList && pl.classList.contains('ad-showing')) { I.pcm = []; I.len = 0; return; }
+    const r = I.sr / 16000, n = Math.floor(data.length / r), out = new Float32Array(n); let e = 0;
+    for (let k = 0; k < n; k++) { const a = Math.floor(k * r), b = Math.min(data.length, Math.floor((k + 1) * r)); let s2 = 0; for (let j = a; j < b; j++) s2 += data[j]; const v = s2 / ((b - a) || 1); out[k] = v; e += v * v; }
+    const rms = Math.sqrt(e / (n || 1)), start = video.currentTime - data.length / I.sr;
+    if (I.len && Math.abs(start - (I.t0 + I.len / 16000)) > 1.2) { I.pcm = []; I.len = 0; }
+    if (!I.len) I.t0 = Math.max(0, start);
+    I.pcm.push(out); I.len += n; I.silent = rms < 0.012 ? I.silent + 1 : 0;
+    const dur = I.len / 16000;
+    if ((dur >= 2.5 && I.silent >= 4) || dur >= 8) flushInterp(I);
+  }
+  function flushInterp(I) {
+    const len = I.len, t0 = I.t0, pcm = I.pcm; I.pcm = []; I.len = 0; I.silent = 0;
+    let e = 0; for (const a of pcm) for (let k = 0; k < a.length; k++) e += a[k] * a[k];
+    if (!len || Math.sqrt(e / len) < 0.005) return;
+    const b = new ArrayBuffer(44 + len * 2), v = new DataView(b), w = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + len * 2, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, len * 2, true);
+    let o = 44; for (const a of pcm) for (let k = 0; k < a.length; k++) { const x = Math.max(-1, Math.min(1, a[k])); v.setInt16(o, x < 0 ? x * 0x8000 : x * 0x7fff, true); o += 2; }
+    sendInterp(I, new Blob([b], { type: 'audio/wav' }), t0);
+  }
+  async function sendInterp(I, wav, t0) {
+    const seq = I.seq++, fd = new FormData();
+    fd.append('file', wav, 'clip.wav'); if (I.lang) fd.append('lang', I.lang);
+    fd.append('prev', JSON.stringify(I.prev.slice(-3)));
+    let items = [];
+    try {
+      const j = await srvJSON('/api/interpret', { method: 'POST', body: fd });
+      if (j.language && !I.lang) I.lang = LANGS[String(j.language).toLowerCase()] || null;
+      items = (j.items || []).map((x) => ({ start: t0 + x.start, end: t0 + x.end, src: x.src, text: x.vi || x.src }));
+    } catch (e) { setStatus('⚡ ' + (e.message || 'Mạng chậm…'), true); }
+    if (interp !== I) return;
+    I.results[seq] = items;
+    while (I.results[I.next]) { const it = I.results[I.next]; delete I.results[I.next]; I.next++; for (const x of it) { I.prev.push(x.src); cues.push(x); I.queue.push(x); } }
+    pumpInterp(I);
+  }
+  function pumpInterp(I) {
+    if (interp !== I || iSpeaking || video.paused) return;
+    if (!I.queue.length) { setVol(1); return; }
+    let c = I.queue.shift();
+    while (I.queue.length && video.currentTime - c.end > 15) c = I.queue.shift();
+    const lag = Math.max(0, video.currentTime - c.start), rate = Math.min(1.9, cfg.rate * styleOf()[3] * (1 + 0.15 * I.queue.length + (lag > 7 ? 0.15 : 0)));
+    iSpeaking = true; setVol(cfg.duck); showText(c.text);
+    setStatus(`⚡ Phiên dịch tức thời · giọng Việt trễ khoảng ${Math.round(lag)} giây`);
+    const next = () => { if (!iSpeaking) return; iSpeaking = false; clearTimeout(iWatch); if (!I.queue.length) { setVol(1); showText(''); } pumpInterp(I); };
+    clearTimeout(iWatch); iWatch = setTimeout(next, (c.text.length / CPS / rate) * 1000 + 4000);
+    speakText(c.text, rate, next);
+  }
+  function interpPause() { if (interp) { interp.queue = []; interp.pcm = []; interp.len = 0; iSpeaking = false; try { speechSynthesis.cancel(); } catch (e) {} setVol(1); showText(''); } }
+
   /* ---------- Đồng bộ theo video ---------- */
   const cueAt = (t) => { let lo = 0, hi = cues.length - 1, a = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (cues[m].start <= t) { a = m; lo = m + 1; } else hi = m - 1; } return a; };
-  const resetFrom = (t) => { stopSpeech(); spoken = new Set(cues.map((c, i) => (c.start < t - 0.25 ? i : -1)).filter((i) => i >= 0)); };
+  const resetFrom = (t) => { stopSpeech(); interpPause(); spoken = new Set(cues.map((c, i) => (c.start < t - 0.25 ? i : -1)).filter((i) => i >= 0)); };
   const onSeek = () => { if (running) resetFrom(video.currentTime); };
-  const onPause = () => { if (running && !holdPause && !liveWait) stopSpeech(); };
+  const onPause = () => { if (running && !holdPause && !liveWait) { stopSpeech(); interpPause(); } };
   function tick() {
     if (!running || !video) return;
     const pl = getPlayer();
     if (pl && pl.classList && pl.classList.contains('ad-showing')) { showSub(-1); return; }
     if (video.paused && !holdPause) return;
     liveCheck(video.currentTime);
+    if (interp) return;
     const t = video.currentTime, i = cueAt(t), inside = i >= 0 && t < cues[i].end + 0.3;
     showSub(speaking >= 0 ? speaking : inside ? i : -1);
     if (i >= 0 && !spoken.has(i) && t < cues[i].end) { spoken.add(i); onCue(i); }
@@ -296,12 +381,16 @@
     try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {} // mở khoá âm thanh trên iPhone
     btnMain.disabled = true;
     try {
-      if (vid !== id || (!cues.length && !live)) {
+      if (vid !== id || (!cues.length && !live && !interp)) {
         live = null;
-        if (cfg.source === 'server') await startLive(id);
+        if (cfg.source === 'interp') startInterp();
+        else if (cfg.source === 'server') await startLive(id);
         else {
           try { const r = await loadCaptions(id); cues = r.list; vid = id; setStatus(`${r.label} · ${cues.length} câu`); }
-          catch (e) { if (cfg.srv.trim()) { setStatus(e.message + ' → chuyển sang tự nghe bằng máy chủ…'); await startLive(id); } else throw e; }
+          catch (e) {
+            if (!cfg.srv.trim()) throw e;
+            try { startInterp(); } catch (e2) { setStatus(e.message + ' → chuyển sang tự nghe bằng máy chủ…'); await startLive(id); }
+          }
         }
       }
       orig = { volume: video.volume, muted: video.muted };
@@ -315,7 +404,7 @@
     btnMain.disabled = false;
   }
   function stop(silent) {
-    running = false; clearInterval(timer); liveWait = false; stopSpeech(); showSub(-1);
+    running = false; clearInterval(timer); liveWait = false; stopInterp(); stopSpeech(); showSub(-1); showText('');
     if (video) { video.removeEventListener('seeking', onSeek); video.removeEventListener('pause', onPause); }
     orig = null; fab && fab.classList.remove('on');
     if (btnMain) btnMain.textContent = '▶ Bắt đầu lồng tiếng';
@@ -324,6 +413,7 @@
 
   /* ---------- Phụ đề tiếng Việt trên video ---------- */
   let subBox = null, subText = null, lastSub = -2;
+  function showText(t) { lastSub = -3; if (!subBox || !subBox.isConnected) { showSub(-1); } if (!subBox) return; subBox.style.display = t && cfg.sub ? '' : 'none'; subText.textContent = t || ''; }
   function showSub(i) {
     if (i === lastSub && subBox && subBox.isConnected) return;
     lastSub = i;
@@ -402,8 +492,8 @@
     const sub = el('input', { type: 'checkbox', checked: cfg.sub }); sub.onchange = () => { cfg.sub = sub.checked; saveCfg(); lastSub = -2; };
     const wait = el('input', { type: 'checkbox', checked: cfg.wait }); wait.onchange = () => { cfg.wait = wait.checked; saveCfg(); };
     const close = el('button', { className: 'x', textContent: '✕' });
-    const source = el('select'); [['auto', 'Phụ đề YouTube (nhanh)'], ['server', 'Tự nghe bằng máy chủ (chính xác hơn)']].forEach(([v, n]) => source.append(new Option(n, v)));
-    source.value = cfg.source; source.onchange = () => { cfg.source = source.value; saveCfg(); cues = []; vid = null; live = null; };
+    const source = el('select'); [['auto', 'Phụ đề YouTube (không cần máy chủ)'], ['interp', '⚡ Phiên dịch tức thời (nghe tiếng video)'], ['server', 'Dịch trước bằng máy chủ (khớp nhất)']].forEach(([v, n]) => source.append(new Option(n, v)));
+    source.value = cfg.source; source.onchange = () => { cfg.source = source.value; saveCfg(); if (running) stop(true); cues = []; vid = null; live = null; stopInterp(); };
     const srv = el('input', { type: 'text', value: cfg.srv, placeholder: 'https://longtieng-downloader.onrender.com' });
     srv.oninput = () => { cfg.srv = srv.value.trim(); saveCfg(); };
     const key = el('input', { type: 'text', value: cfg.key, placeholder: 'API_TOKEN' });
@@ -441,7 +531,7 @@
     if (id === lastId) return;
     lastId = id;
     if (running) stop(true);
-    cues = []; vid = null; lastSub = -2; live = null; liveWait = false;
+    cues = []; vid = null; lastSub = -2; live = null; liveWait = false; stopInterp();
     setStatus(id ? 'Bấm Bắt đầu để lồng tiếng video này.' : '');
   }
   function init() { buildUI(); onNav(); }
