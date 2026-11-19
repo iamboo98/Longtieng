@@ -9,7 +9,7 @@ services:
       - key: API_TOKEN
         generateValue: true
       - key: ALLOWED_ORIGINS
-        value: https://iamboo98.github.io
+        value: https://iamboo98.github.io,https://www.youtube.com,https://m.youtube.com
       - key: MAX_FILESIZE_MB
         value: "300"
       - key: MAX_DURATION_MIN

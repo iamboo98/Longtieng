@@ -44,11 +44,13 @@ Cài tiện ích **Tampermonkey** cho Chrome / Edge / Firefox, rồi mở link �
 - Trên iPhone, Safari không cho chỉnh nhỏ âm gốc, nên khi đang đọc âm gốc sẽ tắt hẳn.
 - Video không có phụ đề (kể cả phụ đề tự động) thì chưa lồng tiếng được.
 
-## Tự nghe & dịch video (không cần phụ đề)
-Trên bản GitHub Pages, khi bạn chọn video hoặc dán link, app tự động:
-1. Gửi video lên máy chủ → tách âm thanh → **Groq Whisper** nghe ra lời thoại kèm thời gian.
-2. Dịch sang tiếng Việt bằng mô hình ngôn ngữ của Groq (tự gán nhân vật theo người nói).
-3. Sẵn sàng lồng tiếng — bấm **▶ Phát lồng tiếng**.
+## Dịch trực tiếp khi xem (không cần phụ đề)
+Trên bản GitHub Pages, khi bạn chọn video hoặc dán link, app bật **chế độ dịch trực tiếp**:
+1. Máy chủ lấy âm thanh của video (tải tệp lên, hoặc tự tải từ link).
+2. Từng đoạn 25–60 giây được **Groq Whisper** nghe ra lời thoại rồi dịch sang tiếng Việt, luôn đi trước chỗ bạn đang xem khoảng 1 phút.
+3. Bấm **▶ Phát lồng tiếng** ngay khi đoạn đầu xong (vài giây). Nếu bản dịch chưa theo kịp, video tự tạm dừng vài giây rồi phát tiếp.
+
+Tiện ích YouTube cũng có chế độ này: trong bảng tiện ích chọn **Nguồn lời thoại → Tự nghe bằng máy chủ**, hoặc để mặc định — video không có phụ đề sẽ tự chuyển sang máy chủ. Nhập địa chỉ máy chủ và mã ở mục **Máy chủ** cuối bảng.
 
 Cần đặt `GROQ_API_KEY` cho máy chủ: tạo tài khoản miễn phí tại <https://console.groq.com> → **API Keys** → **Create API Key**, rồi thêm vào Render → dịch vụ `longtieng-downloader` → **Environment**.
 
@@ -75,7 +77,7 @@ pip install -r requirements.txt && uvicorn app:app --port 8000
 | Biến | Ý nghĩa | Mặc định |
 |---|---|---|
 | `API_TOKEN` | Mã truy cập, app gửi qua header `X-Api-Key` | trống (không kiểm tra) |
-| `ALLOWED_ORIGINS` | Trang web được phép gọi máy chủ | `*` |
+| `ALLOWED_ORIGINS` | Trang web được phép gọi máy chủ (thêm `https://www.youtube.com,https://m.youtube.com` cho tiện ích YouTube) | `*` |
 | `MAX_FILESIZE_MB` | Dung lượng video tối đa | 500 |
 | `MAX_DURATION_MIN` | Thời lượng tối đa (phút) | 90 |
 | `GROQ_API_KEY` | Mã API Groq (miễn phí) để tự nghe lời thoại và dịch | trống (tắt) |

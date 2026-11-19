@@ -342,6 +342,121 @@ def transcribe_url(req: Request, url: str, lang: str | None = None):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# ---------------------------------------------------------------------------
+# Dịch trực tiếp: tạo "phiên" giữ âm thanh trên máy chủ, app lấy từng đoạn
+# ---------------------------------------------------------------------------
+JOBS: dict = {}
+JOB_TTL = 3 * 3600
+
+
+def clean_jobs() -> None:
+    now = time.time()
+    for k in [k for k, j in JOBS.items() if now - j["t"] > JOB_TTL]:
+        shutil.rmtree(JOBS.pop(k)["dir"], ignore_errors=True)
+
+
+def new_job(src: str, tmp: str) -> dict:
+    audio = os.path.join(tmp, "audio.mp3")
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "32k", audio],
+                       capture_output=True, text=True, timeout=1800)
+    if r.returncode != 0 or not os.path.exists(audio):
+        raise HTTPException(422, "Không tách được âm thanh: video không có tiếng hoặc định dạng lạ.")
+    try:
+        os.remove(src)
+    except OSError:
+        pass
+    pr = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", audio],
+                        capture_output=True, text=True)
+    dur = float((pr.stdout or "0").strip() or 0)
+    jid = os.path.basename(tmp)
+    JOBS[jid] = {"dir": tmp, "audio": audio, "duration": dur, "t": time.time()}
+    return {"job": jid, "duration": dur}
+
+
+@app.post("/api/live/upload")
+def live_upload(req: Request, file: UploadFile = File(...)):
+    auth(req)
+    need_groq()
+    clean_jobs()
+    tmp = tempfile.mkdtemp(prefix="job")
+    try:
+        src = os.path.join(tmp, "in" + (os.path.splitext(file.filename or "")[1] or ".mp4"))
+        size = 0
+        with open(src, "wb") as out:
+            while chunk := file.file.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_MB * 1024 * 1024:
+                    raise HTTPException(413, f"Video lớn hơn giới hạn {MAX_MB} MB.")
+                out.write(chunk)
+        return new_job(src, tmp)
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+
+
+@app.get("/api/live/start")
+def live_start(req: Request, url: str):
+    guard(req, url)
+    need_groq()
+    clean_jobs()
+    tmp = tempfile.mkdtemp(prefix="job")
+    try:
+        try:
+            i = get_info(url)
+        except yt_dlp.utils.DownloadError as e:
+            raise HTTPException(422, friendly(e))
+        check_limits(i)
+        opts = base_opts(tmp) | {"outtmpl": "src.%(ext)s", "format": "ba/b", "max_filesize": MAX_MB * 1024 * 1024}
+        try:
+            with yt_dlp.YoutubeDL(opts) as y:
+                y.download([i.get("webpage_url") or url])
+        except yt_dlp.utils.DownloadError as e:
+            raise HTTPException(422, friendly(e))
+        files = [f for f in glob.glob(os.path.join(tmp, "src.*")) if not f.endswith((".part", ".ytdl"))]
+        if not files:
+            raise HTTPException(422, "Không tải được âm thanh của video.")
+        return new_job(files[0], tmp)
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+
+
+@app.get("/api/live/chunk")
+def live_chunk(req: Request, job: str, start: float = 0, dur: float = 45, lang: str | None = None):
+    auth(req)
+    need_groq()
+    j = JOBS.get(job)
+    if not j:
+        raise HTTPException(404, "Phiên dịch đã hết hạn, hãy bắt đầu lại.")
+    j["t"] = time.time()
+    start, dur = max(0.0, start), max(5.0, min(dur, 600.0))
+    if start >= j["duration"]:
+        return {"start": start, "end": start, "segments": [], "done": True, "duration": j["duration"]}
+    part = os.path.join(j["dir"], f"c_{int(start * 1000)}.mp3")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-t", str(dur), "-i", j["audio"],
+                    "-ac", "1", "-ar", "16000", "-b:a", "32k", part], capture_output=True, timeout=120)
+    end = min(start + dur, j["duration"])
+    segs = []
+    try:
+        if os.path.exists(part) and os.path.getsize(part) > 1000:
+            out = whisper(part, lang)
+            for s in out.get("segments") or []:
+                t = (s.get("text") or "").strip()
+                if not t or s.get("no_speech_prob", 0) > 0.8:
+                    continue
+                segs.append({"start": round(start + s["start"], 2), "end": round(min(start + s["end"], end), 2), "text": t})
+            lang_out = out.get("language")
+        else:
+            lang_out = None
+    finally:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+    return {"start": start, "end": end, "segments": segs, "language": lang_out,
+            "done": end >= j["duration"] - 0.05, "duration": j["duration"]}
+
+
 _llm_cache: dict = {}
 LLM_PREFER = [m.strip() for m in os.getenv(
     "GROQ_LLM_MODELS", "openai/gpt-oss-120b,llama-3.3-70b-versatile,openai/gpt-oss-20b,llama-3.1-8b-instant").split(",") if m.strip()]
