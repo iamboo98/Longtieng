@@ -176,6 +176,8 @@ details[open] summary{margin-bottom:8px}
         <input type="text" id="srv" inputmode="url" placeholder="https://longtieng-downloader.onrender.com">
         <div class="lbl" style="margin-top:6px">Mã truy cập (API_TOKEN)</div>
         <input type="text" id="srvKey" placeholder="để trống nếu máy chủ không đặt mã">
+        <div class="lbl" style="margin-top:6px">Mã Groq (để tự nghe &amp; dịch)</div>
+        <input type="password" id="srvGroq" autocomplete="off" placeholder="gsk_… (lấy miễn phí ở console.groq.com)">
         <div class="row" style="margin-top:6px"><button class="sm" id="srvTest">Kiểm tra kết nối</button></div>
         <div class="st2" id="srvSt"></div>
         <div class="hint">Máy chủ dùng yt-dlp để tải video. Mã nguồn và cách triển khai miễn phí nằm trong thư mục <b>server/</b> của repo.</div>
@@ -372,16 +374,17 @@ $('bLink').onclick=()=>{$('linkBox').classList.toggle('hide');$('linkTx').focus(
 $('useLink').onclick=()=>openLink($('linkTx').value.trim());
 $('dlLink').onclick=()=>dlLink($('linkTx').value.trim());
 /* ===== Tải video qua máy chủ ===== */
-$('srv').value=LS.get('ltv_srv','');$('srvKey').value=LS.get('ltv_srvKey','');
+$('srv').value=LS.get('ltv_srv','');$('srvKey').value=LS.get('ltv_srvKey','');$('srvGroq').value=LS.get('ltv_groq','');
+$('srvGroq').oninput=()=>{$('srvGroq').value=$('srvGroq').value.replace(/\s+/g,'');LS.set('ltv_groq',$('srvGroq').value)};
 $('srv').oninput=()=>{LS.set('ltv_srv',$('srv').value.trim());refresh()};$('srvKey').oninput=()=>LS.set('ltv_srvKey',$('srvKey').value.trim());
 const hasSrv=()=>!!$('srv').value.trim();
 const srvBase=()=>$('srv').value.trim().replace(/\/+$/,'').replace(/^(?!https?:\/\/)/,'https://');
-const srvHead=()=>{const k=$('srvKey').value.trim();return k?{'X-Api-Key':k}:{}};
+const srvHead=()=>{const h={},k=$('srvKey').value.trim(),g=$('srvGroq').value.trim();if(k)h['X-Api-Key']=k;if(g)h['X-Groq-Key']=g;return h};
 async function srvErr(r){try{const j=await r.json();return j.detail||('Lỗi '+r.status)}catch(e){return 'Lỗi máy chủ '+r.status}}
 $('srvTest').onclick=async()=>{
   if(!$('srv').value.trim()){st('srvSt','Nhập địa chỉ máy chủ trước.','er');return}
   st('srvSt','Đang kiểm tra… (máy chủ miễn phí có thể mất ~1 phút để thức dậy)');
-  try{const r=await fetch(srvBase()+'/api/health');const j=await r.json();st('srvSt',`Kết nối được · yt-dlp ${j.yt_dlp}${j.token?' · có mã truy cập':''} · ${j.groq?'nghe & dịch: bật':'chưa có GROQ_API_KEY (chưa tự nghe & dịch được)'}`,j.groq?'ok':'er');refresh()}
+  try{const r=await fetch(srvBase()+'/api/health');const j=await r.json();st('srvSt',`Kết nối được · yt-dlp ${j.yt_dlp}${j.token?' · có mã truy cập':''} · ${j.groq||(j.groq_from_app&&$('srvGroq').value.trim())?'nghe & dịch: bật':j.groq_from_app?'hãy dán Mã Groq bên trên để tự nghe & dịch':'máy chủ đang chạy bản cũ — vào Render bấm Manual Deploy → Deploy latest commit'}`,(j.groq||(j.groq_from_app&&$('srvGroq').value.trim()))?'ok':'er');refresh()}
   catch(e){st('srvSt',inClaude?'Bản trong Claude không gọi được máy chủ bên ngoài. Hãy dùng bản GitHub Pages.':'Không kết nối được máy chủ. Kiểm tra địa chỉ, hoặc ALLOWED_ORIGINS trên máy chủ.','er')}
 };
 let savedBlob=null;
@@ -659,7 +662,7 @@ $('autoRun').checked=LS.get('ltv_autoRun',true);$('autoRun').onchange=()=>LS.set
 function newSource(ref,key){srcRef=ref;videoKey=key+':'+Date.now();live=null;liveWait=false;refresh();
   if($('autoRun').checked&&hasSrv()&&!(cues.length&&cuesFor===null))autoDub();}
 function xhrUpload(url,form,onP){return new Promise((res,rej)=>{
-  const x=new XMLHttpRequest();x.open('POST',url);const k=$('srvKey').value.trim();if(k)x.setRequestHeader('X-Api-Key',k);
+  const x=new XMLHttpRequest();x.open('POST',url);Object.entries(srvHead()).forEach(([a,b])=>x.setRequestHeader(a,b));
   x.upload.onprogress=e=>{if(e.lengthComputable)onP(e.loaded/e.total)};
   x.onload=()=>{let j=null;try{j=JSON.parse(x.responseText)}catch(e){}x.status<300&&j?res(j):rej(new Error(j&&j.detail||('Lỗi máy chủ '+x.status)))};
   x.onerror=()=>rej(new Error('Mất kết nối với máy chủ.'));x.send(form);

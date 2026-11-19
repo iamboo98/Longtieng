@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Lồng tiếng Việt cho YouTube
 // @namespace    https://github.com/iamboo98/longtieng
-// @version      1.1.0
+// @version      1.2.0
 // @description  Tự lồng tiếng Việt video YouTube: lấy phụ đề (tự dịch sang tiếng Việt nếu cần) và đọc bằng giọng Việt khớp theo video.
 // @author       iamboo98
 // @match        https://www.youtube.com/*
@@ -41,7 +41,7 @@
     ['gi', 'Người già', 0.7, 0.82], ['tt', 'Tin tức', 1.0, 1.12], ['kc', 'Kể chuyện', 0.9, 0.88],
     ['hh', 'Hào hứng', 1.25, 1.2], ['ht', 'Hoạt hình', 1.95, 1.15],
   ];
-  const DEF = { voice: 'auto', style: 'tn', rate: 1, duck: 0.1, sub: true, wait: true, source: 'auto', srv: '', key: '' };
+  const DEF = { voice: 'auto', style: 'tn', rate: 1, duck: 0.1, sub: true, wait: true, source: 'auto', srv: '', key: '', groq: '' };
   let cfg = DEF;
   try { cfg = Object.assign({}, DEF, JSON.parse(localStorage.getItem('ltv_yt') || '{}')); } catch (e) {}
   const saveCfg = () => { try { localStorage.setItem('ltv_yt', JSON.stringify(cfg)); } catch (e) {} };
@@ -219,7 +219,7 @@
   /* ---------- Dịch trực tiếp qua máy chủ (video không có phụ đề) ---------- */
   let live = null, liveWait = false;
   const srvBase = () => cfg.srv.trim().replace(/\/+$/, '').replace(/^(?!https?:\/\/)/, 'https://');
-  const srvHead = () => (cfg.key ? { 'X-Api-Key': cfg.key } : {});
+  const srvHead = () => { const h = {}; if (cfg.key) h['X-Api-Key'] = cfg.key; if (cfg.groq) h['X-Groq-Key'] = cfg.groq; return h; };
   async function srvJSON(path, opt) {
     const r = await oFetch(srvBase() + path, Object.assign({ headers: srvHead() }, opt || {}));
     let j = null; try { j = await r.json(); } catch (e) {}
@@ -373,7 +373,7 @@
       label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#9aa3b2}
       label.c{flex-direction:row;align-items:center;gap:7px;color:#eceff4}
       select,input[type=range]{width:100%}
-      input[type=text]{background:#1e222b;color:#eceff4;border:1px solid #2a2f3a;border-radius:8px;padding:6px;font-size:13px;width:100%}
+      input[type=text],input[type=password]{background:#1e222b;color:#eceff4;border:1px solid #2a2f3a;border-radius:8px;padding:6px;font-size:13px;width:100%}
       details{font-size:12px;color:#9aa3b2}summary{cursor:pointer;margin-bottom:6px}details label{margin-top:6px}
       .panel{max-height:calc(100vh - 160px);overflow:auto}
       select{background:#1e222b;color:#eceff4;border:1px solid #2a2f3a;border-radius:8px;padding:6px;font-size:13px}
@@ -408,8 +408,10 @@
     srv.oninput = () => { cfg.srv = srv.value.trim(); saveCfg(); };
     const key = el('input', { type: 'text', value: cfg.key, placeholder: 'API_TOKEN' });
     key.oninput = () => { cfg.key = key.value.trim(); saveCfg(); };
+    const groq = el('input', { type: 'password', value: cfg.groq, placeholder: 'gsk_…', autocomplete: 'off' });
+    groq.oninput = () => { cfg.groq = groq.value.replace(/\s+/g, ''); saveCfg(); };
     const adv = el('details', {}, el('summary', { textContent: 'Máy chủ (cho video không có phụ đề)' }),
-      el('label', {}, 'Địa chỉ máy chủ', srv), el('label', {}, 'Mã truy cập', key));
+      el('label', {}, 'Địa chỉ máy chủ', srv), el('label', {}, 'Mã truy cập', key), el('label', {}, 'Mã Groq', groq));
 
     panel = el('div', { className: 'panel' },
       el('div', { className: 'hd' }, el('span', { textContent: 'Lồng tiếng Việt' }), close),

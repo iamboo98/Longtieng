@@ -20,6 +20,7 @@ import socket
 import tempfile
 from urllib.parse import quote, urlparse
 
+import contextvars
 import json
 import subprocess
 import time
@@ -38,6 +39,11 @@ MAX_MIN = int(os.getenv("MAX_DURATION_MIN", "90"))
 COOKIES = os.getenv("COOKIES_FILE") or None
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ = "https://api.groq.com/openai/v1"
+_cur_key = contextvars.ContextVar("groq_key", default="")
+
+
+def gkey() -> str:
+    return _cur_key.get() or GROQ_KEY
 
 app = FastAPI(title="Longtieng downloader")
 app.add_middleware(
@@ -114,7 +120,7 @@ def safe_name(s: str) -> str:
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN), "groq": bool(GROQ_KEY)}
+    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN), "groq": bool(GROQ_KEY), "groq_from_app": True}
 
 
 @app.get("/api/info")
@@ -240,9 +246,12 @@ def subs(req: Request, url: str, prefer: str = "vi"):
 # ---------------------------------------------------------------------------
 # Nhận dạng giọng nói (Groq Whisper) và dịch (Groq LLM)
 # ---------------------------------------------------------------------------
-def need_groq() -> None:
-    if not GROQ_KEY:
-        raise HTTPException(503, "Máy chủ chưa có GROQ_API_KEY. Thêm mã Groq trong Render → Environment.")
+def need_groq(req: Request | None = None) -> None:
+    k = (req.headers.get("x-groq-key") or "").strip() if req is not None else ""
+    if k:
+        _cur_key.set(k)
+    if not gkey():
+        raise HTTPException(503, "Chưa có mã Groq. Dán mã Groq trong app: Cài đặt → Máy chủ tải video → Mã Groq.")
 
 
 def auth(req: Request) -> None:
@@ -270,13 +279,13 @@ def whisper(path: str, lang: str | None) -> dict:
         data["language"] = lang
     for attempt in range(4):
         with open(path, "rb") as f:
-            r = httpx.post(f"{GROQ}/audio/transcriptions", headers={"Authorization": f"Bearer {GROQ_KEY}"},
+            r = httpx.post(f"{GROQ}/audio/transcriptions", headers={"Authorization": f"Bearer {gkey()}"},
                            data=data, files={"file": (os.path.basename(path), f, "audio/mpeg")}, timeout=600)
         if r.status_code == 429:
             time.sleep(float(r.headers.get("retry-after", "10")) + 1)
             continue
         if r.status_code == 401:
-            raise HTTPException(502, "Mã GROQ_API_KEY không đúng.")
+            raise HTTPException(502, "Mã Groq không đúng, hãy kiểm tra lại.")
         if r.status_code >= 400:
             raise HTTPException(502, f"Groq báo lỗi khi nhận dạng giọng nói ({r.status_code}): {r.text[:200]}")
         return r.json()
@@ -301,7 +310,7 @@ def transcribe_file(src: str, tmp: str, lang: str | None) -> dict:
 @app.post("/api/transcribe")
 def transcribe_upload(req: Request, file: UploadFile = File(...), lang: str | None = None):
     auth(req)
-    need_groq()
+    need_groq(req)
     tmp = tempfile.mkdtemp(prefix="ltt_")
     try:
         src = os.path.join(tmp, "in" + (os.path.splitext(file.filename or "")[1] or ".mp4"))
@@ -320,7 +329,7 @@ def transcribe_upload(req: Request, file: UploadFile = File(...), lang: str | No
 @app.get("/api/transcribe")
 def transcribe_url(req: Request, url: str, lang: str | None = None):
     guard(req, url)
-    need_groq()
+    need_groq(req)
     tmp = tempfile.mkdtemp(prefix="ltu_")
     try:
         try:
@@ -376,7 +385,7 @@ def new_job(src: str, tmp: str) -> dict:
 @app.post("/api/live/upload")
 def live_upload(req: Request, file: UploadFile = File(...)):
     auth(req)
-    need_groq()
+    need_groq(req)
     clean_jobs()
     tmp = tempfile.mkdtemp(prefix="job")
     try:
@@ -397,7 +406,7 @@ def live_upload(req: Request, file: UploadFile = File(...)):
 @app.get("/api/live/start")
 def live_start(req: Request, url: str):
     guard(req, url)
-    need_groq()
+    need_groq(req)
     clean_jobs()
     tmp = tempfile.mkdtemp(prefix="job")
     try:
@@ -424,7 +433,7 @@ def live_start(req: Request, url: str):
 @app.get("/api/live/chunk")
 def live_chunk(req: Request, job: str, start: float = 0, dur: float = 45, lang: str | None = None):
     auth(req)
-    need_groq()
+    need_groq(req)
     j = JOBS.get(job)
     if not j:
         raise HTTPException(404, "Phiên dịch đã hết hạn, hãy bắt đầu lại.")
@@ -466,7 +475,7 @@ def llm_model() -> str:
     if _llm_cache.get("t", 0) > time.time() - 3600:
         return _llm_cache["m"]
     try:
-        r = httpx.get(f"{GROQ}/models", headers={"Authorization": f"Bearer {GROQ_KEY}"}, timeout=20)
+        r = httpx.get(f"{GROQ}/models", headers={"Authorization": f"Bearer {gkey()}"}, timeout=20)
         ids = {m["id"] for m in r.json().get("data", [])}
         m = next((x for x in LLM_PREFER if x in ids), LLM_PREFER[0])
     except Exception:
@@ -491,7 +500,7 @@ def parse_json_array(text: str):
 @app.post("/api/translate")
 async def translate(req: Request):
     auth(req)
-    need_groq()
+    need_groq(req)
     body = await req.json()
     items = body.get("items") or []
     if not items or len(items) > 80:
@@ -512,7 +521,7 @@ async def translate(req: Request):
     model = llm_model()
     for attempt in range(4):
         async with httpx.AsyncClient(timeout=120) as c:
-            r = await c.post(f"{GROQ}/chat/completions", headers={"Authorization": f"Bearer {GROQ_KEY}"}, json={
+            r = await c.post(f"{GROQ}/chat/completions", headers={"Authorization": f"Bearer {gkey()}"}, json={
                 "model": model, "temperature": 0.3,
                 "response_format": {"type": "json_object"},
                 "messages": [{"role": "user", "content": prompt}],
