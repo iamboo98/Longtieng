@@ -85,6 +85,7 @@ details[open] summary{margin-bottom:8px}
       <button class="pr" id="play" disabled>▶ Phát lồng tiếng</button>
       <button class="ic" id="stop" disabled title="Dừng">■</button>
       <span class="st" id="vst">Chưa có video</span>
+      <button class="ic hide" id="saveVid" title="Lưu video về máy">💾</button>
     </div>
   </div>
 
@@ -105,8 +106,14 @@ details[open] summary{margin-bottom:8px}
       </div>
       <div id="linkBox" class="hide">
         <input type="text" id="linkTx" inputmode="url" placeholder="Dán link YouTube hoặc link tệp video (.mp4, .webm…)">
-        <div class="row" style="margin-top:6px"><button class="sm" id="useLink">Mở link</button></div>
-        <div class="hint" style="margin-top:4px">Hỗ trợ: YouTube (video, Shorts), link trực tiếp tới tệp video, Google Drive và Dropbox (tệp được chia sẻ công khai). TikTok, Facebook, Instagram: hãy tải video về máy rồi chọn 🎬 Video.</div>
+        <div class="row" style="margin-top:6px">
+          <button class="sm pr" id="dlLink">⬇ Tải video</button>
+          <button class="sm" id="useLink">▶ Chỉ mở xem</button>
+          <select id="dlQ" style="flex:0 0 88px;padding:5px 6px;font-size:12px"><option value="360">360p</option><option value="480">480p</option><option value="720" selected>720p</option><option value="1080">1080p</option></select>
+        </div>
+        <label class="chk" style="margin-top:6px;font-size:12px"><input type="checkbox" id="dlSubs" checked> Lấy luôn phụ đề có sẵn của video</label>
+        <div class="hint" style="margin-top:4px" id="linkHint">⬇ Tải video: YouTube, TikTok, Facebook, Instagram, X và hơn 1000 trang khác (cần máy chủ tải video, xem thẻ Cài đặt). ▶ Chỉ mở xem: YouTube, link tệp video, Google Drive, Dropbox.</div>
+        <div class="prog" id="dlProg"><i></i></div>
       </div>
       <input type="file" id="fVideo" accept="video/*">
       <input type="file" id="fSub" accept=".srt,.vtt,.txt,text/plain">
@@ -160,6 +167,16 @@ details[open] summary{margin-bottom:8px}
       <label class="chk"><input type="checkbox" id="showSub" checked> Hiện phụ đề tiếng Việt</label>
       <div class="row"><button id="exp" disabled>⬇ Tải SRT tiếng Việt</button><button id="cp" disabled>📋 Sao chép SRT</button></div>
       <div class="row"><button id="clr">🗑 Xoá phụ đề</button></div>
+      <details>
+        <summary>Máy chủ tải video</summary>
+        <div class="lbl">Địa chỉ máy chủ</div>
+        <input type="text" id="srv" inputmode="url" placeholder="https://longtieng-downloader.onrender.com">
+        <div class="lbl" style="margin-top:6px">Mã truy cập (API_TOKEN)</div>
+        <input type="text" id="srvKey" placeholder="để trống nếu máy chủ không đặt mã">
+        <div class="row" style="margin-top:6px"><button class="sm" id="srvTest">Kiểm tra kết nối</button></div>
+        <div class="st2" id="srvSt"></div>
+        <div class="hint">Máy chủ dùng yt-dlp để tải video. Mã nguồn và cách triển khai miễn phí nằm trong thư mục <b>server/</b> của repo.</div>
+      </details>
       <div class="hint">App cần phụ đề gốc vì trình duyệt không tự nghe được tiếng trong video. Giọng lồng tiếng phát trực tiếp khi xem, không ghi ra tệp video mới được.</div>
     </div>
   </div>
@@ -343,11 +360,77 @@ function ensureGraph(){
   }catch(e){}
 }
 $('fVideo').onchange=e=>{
-  const f=e.target.files[0];if(!f)return;clearYT();
+  const f=e.target.files[0];if(!f)return;clearYT();savedBlob=null;$('saveVid').classList.add('hide');
   vname=f.name.replace(/\.[^.]+$/,'');newVideo(URL.createObjectURL(f));showStage('file');st('vst',f.name,'ok');e.target.value='';
 };
 $('bLink').onclick=()=>{$('linkBox').classList.toggle('hide');$('linkTx').focus()};
 $('useLink').onclick=()=>openLink($('linkTx').value.trim());
+$('dlLink').onclick=()=>dlLink($('linkTx').value.trim());
+/* ===== Tải video qua máy chủ ===== */
+$('srv').value=LS.get('ltv_srv','');$('srvKey').value=LS.get('ltv_srvKey','');
+$('srv').oninput=()=>LS.set('ltv_srv',$('srv').value.trim());$('srvKey').oninput=()=>LS.set('ltv_srvKey',$('srvKey').value.trim());
+const srvBase=()=>$('srv').value.trim().replace(/\/+$/,'').replace(/^(?!https?:\/\/)/,'https://');
+const srvHead=()=>{const k=$('srvKey').value.trim();return k?{'X-Api-Key':k}:{}};
+async function srvErr(r){try{const j=await r.json();return j.detail||('Lỗi '+r.status)}catch(e){return 'Lỗi máy chủ '+r.status}}
+$('srvTest').onclick=async()=>{
+  if(!$('srv').value.trim()){st('srvSt','Nhập địa chỉ máy chủ trước.','er');return}
+  st('srvSt','Đang kiểm tra… (máy chủ miễn phí có thể mất ~1 phút để thức dậy)');
+  try{const r=await fetch(srvBase()+'/api/health');const j=await r.json();st('srvSt',`Kết nối được · yt-dlp ${j.yt_dlp}${j.token?' · có mã truy cập':''}`,'ok')}
+  catch(e){st('srvSt',inClaude?'Bản trong Claude không gọi được máy chủ bên ngoài. Hãy dùng bản GitHub Pages.':'Không kết nối được máy chủ. Kiểm tra địa chỉ, hoặc ALLOWED_ORIGINS trên máy chủ.','er')}
+};
+let savedBlob=null;
+async function readWithProgress(r,onP){
+  const total=+r.headers.get('Content-Length')||0;
+  if(!r.body||!r.body.getReader)return await r.blob();
+  const rd=r.body.getReader(),parts=[];let got=0;
+  for(;;){const {done,value}=await rd.read();if(done)break;parts.push(value);got+=value.length;onP(got,total)}
+  return new Blob(parts,{type:r.headers.get('Content-Type')||'video/mp4'});
+}
+function useBlob(blob,name){
+  clearYT();vname=name||'video';savedBlob=blob;
+  newVideo(URL.createObjectURL(blob));showStage('file');$('saveVid').classList.remove('hide');
+}
+async function dlLink(u){
+  if(!u)return;if(!/^https?:\/\//i.test(u))u='https://'+u;
+  const pg=$('dlProg'),fill=pg.firstElementChild,btn=$('dlLink');
+  const mb=n=>(n/1048576).toFixed(1)+' MB';
+  const show=(m,c)=>st('vst',m,c);
+  btn.disabled=true;pg.style.display='block';fill.style.width='0';
+  try{
+    if(!$('srv').value.trim()){
+      // Không có máy chủ: chỉ tải được link trực tiếp tới tệp video cho phép tải chéo
+      if(ytId(u)||!/\.(mp4|webm|mov|m4v|mkv)(\?|$)/i.test(u)&&!/drive\.google|dropbox/i.test(u)){
+        show('Link này cần máy chủ tải video. Mở thẻ Cài đặt → Máy chủ tải video để thiết lập.','er');return}
+      show('Đang tải video…');
+      const r=await fetch(directUrl(u));if(!r.ok)throw new Error('HTTP '+r.status);
+      const b=await readWithProgress(r,(g,t)=>{fill.style.width=t?100*g/t+'%':'50%';show('Đang tải '+mb(g)+(t?' / '+mb(t):''))});
+      let nm='video';try{nm=decodeURIComponent(new URL(u).pathname.split('/').pop()).replace(/\.[^.]+$/,'')||'video'}catch(e){}
+      useBlob(b,nm);show(`Đã tải ${mb(b.size)} · bấm 💾 để lưu về máy`,'ok');return;
+    }
+    show('Máy chủ đang tải video… (video dài có thể mất vài phút)');fill.style.width='15%';
+    const r=await fetch(`${srvBase()}/api/download?url=${encodeURIComponent(u)}&q=${$('dlQ').value}`,{headers:srvHead()});
+    if(!r.ok){show(await srvErr(r),'er');return}
+    const title=decodeURIComponent(r.headers.get('X-Title')||'video');
+    const b=await readWithProgress(r,(g,t)=>{fill.style.width=t?15+85*g/t+'%':'60%';show('Đang nhận video '+mb(g)+(t?' / '+mb(t):''))});
+    useBlob(b,title);show(`${title} · ${mb(b.size)} · bấm 💾 để lưu`,'ok');$('linkBox').classList.add('hide');
+    if($('dlSubs').checked){
+      st('sst','Đang lấy phụ đề của video…');
+      try{
+        const s=await fetch(`${srvBase()}/api/subs?url=${encodeURIComponent(u)}&prefer=vi`,{headers:srvHead()});
+        if(s.ok){const tx=await s.text(),list=parseSubs(tx);
+          if(list&&list.length)setCues(list,'Phụ đề '+(s.headers.get('X-Lang')||''));else st('sst','Phụ đề lấy về bị trống.','er')}
+        else st('sst',await srvErr(s),'er');
+      }catch(e){st('sst','Không lấy được phụ đề.','er')}
+    }
+  }catch(e){
+    show(inClaude?'Bản trong Claude không tải được từ link. Hãy dùng bản GitHub Pages.':!$('srv').value.trim()?'Trang chứa video không cho tải trực tiếp. Hãy thiết lập máy chủ tải video trong Cài đặt.':'Mất kết nối với máy chủ: '+(e.message||e),'er');
+  }finally{btn.disabled=false;setTimeout(()=>{pg.style.display='none'},600)}
+}
+$('saveVid').onclick=()=>{
+  if(!savedBlob)return;
+  const a=document.createElement('a');a.href=URL.createObjectURL(savedBlob);a.download=vname+'.mp4';document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+};
 $('linkTx').onkeydown=e=>{if(e.key==='Enter')openLink($('linkTx').value.trim())};
 const ytId=u=>{const m=u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/|v\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([\w-]{11})/);return m&&m[1]};
 function directUrl(u){
