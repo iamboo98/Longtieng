@@ -20,6 +20,30 @@
 - Hiện phụ đề tiếng Việt (và phụ đề gốc) trên video
 - Xuất / sao chép tệp SRT tiếng Việt
 
+## Tự lồng tiếng khi xem YouTube (userscript)
+Tiện ích [`userscript/longtieng.user.js`](userscript/longtieng.user.js) chạy ngay trên trang YouTube: một nút cam hiện ở góc màn hình, bấm **Bắt đầu lồng tiếng** là video được đọc bằng giọng Việt, khớp theo thời gian, kèm phụ đề tiếng Việt.
+
+- Lấy phụ đề của video. Nếu không có phụ đề tiếng Việt, dùng tính năng tự dịch của YouTube.
+- Chọn giọng, phong cách, tốc độ, mức âm gốc; tự dừng video chờ đọc xong câu.
+- Tự chạy lại khi bạn chuyển sang video khác.
+
+### Cài trên iPhone / iPad (Safari)
+1. Cài app miễn phí **Userscripts** (tác giả Justin Wasack) từ App Store.
+2. Mở app Userscripts → chọn một thư mục để lưu script (ví dụ thư mục Userscripts trong Tệp).
+3. Vào **Cài đặt → Safari → Tiện ích mở rộng → Userscripts** → bật lên, phần *Quyền* chọn **Cho phép** với `youtube.com`.
+4. Mở bằng Safari: <https://raw.githubusercontent.com/iamboo98/longtieng/main/userscript/longtieng.user.js>
+5. Chạm biểu tượng **ᴀA** (hoặc 🧩) trên thanh địa chỉ → **Userscripts** → **Install** (Cài đặt).
+6. Mở `m.youtube.com`, vào một video, chạm nút cam ở góc phải → **Bắt đầu lồng tiếng**.
+
+### Cài trên máy tính
+Cài tiện ích **Tampermonkey** cho Chrome / Edge / Firefox, rồi mở link ở bước 4 → **Install**.
+
+### Lưu ý
+- Chỉ chạy khi bạn đang mở trang và màn hình đang sáng. Khoá máy hoặc chuyển app thì giọng đọc dừng.
+- Không dùng chế độ toàn màn hình của iPhone (trình phát gốc của iOS che mất phụ đề và có thể làm dừng giọng đọc); xoay ngang trong trang vẫn được.
+- Trên iPhone, Safari không cho chỉnh nhỏ âm gốc, nên khi đang đọc âm gốc sẽ tắt hẳn.
+- Video không có phụ đề (kể cả phụ đề tự động) thì chưa lồng tiếng được.
+
 ## Tải video từ link bất kỳ
 Nút **🔗 Link → ⬇ Tải video** tải video từ YouTube, TikTok, Facebook, Instagram, X và hơn 1000 trang khác, rồi tự lấy phụ đề có sẵn của video. Tính năng này cần **máy chủ tải video** (thư mục [`server/`](server/), dùng [yt-dlp](https://github.com/yt-dlp/yt-dlp)).
 
