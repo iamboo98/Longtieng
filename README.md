@@ -44,6 +44,11 @@ Cài tiện ích **Tampermonkey** cho Chrome / Edge / Firefox, rồi mở link �
 - Trên iPhone, Safari không cho chỉnh nhỏ âm gốc, nên khi đang đọc âm gốc sẽ tắt hẳn.
 - Video không có phụ đề (kể cả phụ đề tự động) thì chưa lồng tiếng được.
 
+## 🤖 Giọng AI tự nhiên
+Khi có máy chủ, app và tiện ích tự đọc bằng giọng AI tiếng Việt của Microsoft (thư viện edge-tts): **HoaiMy** (nữ) và **NamMinh** (nam) — tự nhiên như người thật, không cần cài giọng trên máy, không cần tài khoản. Nhân vật nam (Nam trầm, Nam trẻ, Người già…) dùng NamMinh, nhân vật nữ và trẻ em dùng HoaiMy với cao độ khác nhau. Có thể tắt trong **Cài đặt → Giọng AI tự nhiên** để dùng giọng của máy.
+
+Lưu ý: edge-tts dùng dịch vụ đọc của Microsoft Edge không chính thức, có thể ngừng hoạt động bất cứ lúc nào; khi đó app tự quay về giọng của máy.
+
 ## ⚡ Phiên dịch tức thời
 Chế độ mặc định khi chọn video từ máy (hoặc video tải qua máy chủ): bấm **▶ Phát lồng tiếng** là video chạy ngay. App nghe tiếng video đang phát, cắt theo chỗ ngắt câu (2,5–8 giây), gửi đoạn ngắn lên máy chủ để Groq nghe + dịch, rồi đọc giọng Việt ngay — giống phiên dịch viên, trễ khoảng 3–5 giây so với lời gốc. Không tải trước, không chờ, không dừng giữa chừng.
 

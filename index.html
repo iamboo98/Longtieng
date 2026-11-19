@@ -169,6 +169,7 @@ details[open] summary{margin-bottom:8px}
       <div><div class="lbl"><span>Tốc độ chung</span><b id="rateV">1.0×</b></div><input type="range" id="rate" min="0.7" max="1.5" step="0.05" value="1"></div>
       <div><div class="lbl"><span>Âm gốc khi có lồng tiếng</span><b id="duckV">10%</b></div><input type="range" id="duck" min="0" max="100" step="5" value="10"></div>
       <div><div class="lbl"><span>Âm gốc khi không có thoại</span><b id="bgV">70%</b></div><input type="range" id="bg" min="0" max="100" step="5" value="70"></div>
+      <label class="chk"><input type="checkbox" id="aiVoice" checked> 🤖 Giọng AI tự nhiên (HoaiMy, NamMinh) — cần máy chủ</label>
       <label class="chk"><input type="checkbox" id="autoRate" checked> Tự tăng tốc để vừa thời lượng câu</label>
       <label class="chk"><input type="checkbox" id="wait" checked> Tạm dừng video khi câu trước chưa đọc xong</label>
       <label class="chk"><input type="checkbox" id="showOrig"> Hiện cả phụ đề gốc</label>
@@ -201,6 +202,8 @@ let cues=[], sample=null, tts=null, downloads=null;
 let spoken=new Set(), speaking=-1, pending=-1, holdPause=false, lastHi=-1, raf=0, vname='video';
 
 /* ===== Phong cách giọng ===== */
+const AI_VOICES=[['vi-VN-HoaiMyNeural','HoaiMy — nữ, tự nhiên'],['vi-VN-NamMinhNeural','NamMinh — nam, tự nhiên']];
+const MALE_STYLES=['nt','nm','gi','rb','tt','kc'];
 const STYLES=[
   {id:'tn', n:'Tự nhiên',     p:1.0, r:1.0,  v:1},
   {id:'nt', n:'Nam trầm',     p:0.55,r:0.95, v:1},
@@ -498,11 +501,12 @@ async function loadYT(id){
     }});
 }
 $('play').onclick=()=>{
-  unlock();ensureGraph();
+  unlock();unlockAudio();ensureGraph();
   if(modeInterp()&&canInterpret()){if(!interp||interp.key!==videoKey){if(!startInterp())return}}
   else if(interp)stopInterp();
   if(P.ended())P.seek(0);
   reset(P.time());P.vol(+$('bg').value/100);resuming=true;P.play();
+  if(!interp){const i0=Math.max(0,cueAt(P.time()));prefetchAI(i0,3)}
 };
 $('stop').onclick=()=>{holdPause=false;P.pause();stopSpeech();stopInterp();showText('')};
 function reset(t){stopSpeech();if(interp){interp.queue=[];interp.pcm=[];interp.len=0;showText('')}spoken=new Set(cues.map((c,i)=>c.start<t-0.25?i:-1).filter(i=>i>=0))}
@@ -536,7 +540,7 @@ function loadVoices(){
     :'Chưa thấy giọng tiếng Việt trên thiết bị. iPhone: Cài đặt → Trợ năng → Nội dung được đọc → Giọng nói → Tiếng Việt. Android: Cài đặt → Chuyển văn bản thành giọng nói → tải tiếng Việt. Máy tính: dùng Edge để có giọng HoaiMy/NamMinh.';
 }
 function voiceOptions(sel,cur){
-  sel.innerHTML='';sel.add(new Option('Giọng Việt tự động','auto'));
+  sel.innerHTML='';sel.add(new Option('Tự động (AI nếu có máy chủ)','auto'));
   const all=$('allLang').checked;
   const vi=devVoices.filter(v=>/^vi/i.test(v.lang)).sort((a,b)=>voiceScore(b)-voiceScore(a));
   if(vi.length){const g=document.createElement('optgroup');g.label='Tiếng Việt';vi.forEach(v=>g.append(new Option(v.name.replace(/Microsoft |Online \(Natural\) - Vietnamese \(Vietnam\)/g,'').trim()+(/natural|online|neural|enhanced|premium/i.test(v.name)?' ★':''),'d:'+v.voiceURI)));sel.append(g)}
@@ -546,6 +550,7 @@ function voiceOptions(sel,cur){
     if(mul.length){const g=document.createElement('optgroup');g.label='Đa ngôn ngữ (đọc được tiếng Việt)';mul.forEach(v=>g.append(new Option(v.name,'d:'+v.voiceURI)));sel.append(g)}
     if(oth.length){const g=document.createElement('optgroup');g.label='Ngôn ngữ khác (giọng lơ lớ)';oth.forEach(v=>g.append(new Option(`${v.name} (${v.lang})`,'d:'+v.voiceURI)));sel.append(g)}
   }
+  {const g=document.createElement('optgroup');g.label='🤖 Giọng AI tự nhiên (qua máy chủ)';AI_VOICES.forEach(([v,n])=>g.append(new Option(n,'a:'+v)));sel.insertBefore(g,sel.options[1]?sel.options[1].parentNode===sel?sel.options[1]:sel.options[1].parentNode:null)}
   if(tts){const g=document.createElement('optgroup');g.label='Giọng Claude';CLAUDE_VOICES.forEach(([v,n])=>g.append(new Option(n,'c:'+v)));sel.append(g)}
   sel.value=[...sel.options].some(o=>o.value===cur)?cur:'auto';
 }
@@ -577,7 +582,54 @@ function rateFor(i){
   return need>slot?base*need/slot:base;
 }
 function duck(on,name){if(P.has())P.vol((on?+$('duck').value:+$('bg').value)/100);$('live').style.display=on?'flex':'none';if(name)$('liveName').textContent=name}
+/* ===== Giọng AI (Microsoft HoaiMy / NamMinh qua máy chủ) ===== */
+const audioEl=new Audio();audioEl.preload='auto';try{audioEl.preservesPitch=true}catch(e){}
+const aiCache=new Map();let aiTok=0;
+$('aiVoice').checked=LS.get('ltv_ai',true);$('aiVoice').onchange=()=>LS.set('ltv_ai',$('aiVoice').checked);
+function aiFor(roleIdx){
+  const r=roles[roleIdx]||roles[0];
+  if(!hasSrv())return null;
+  const sty=styleOf(roleIdx),pitch=Math.round(Math.max(-50,Math.min(50,(sty.p-1)*45)));
+  if(r.voice.startsWith('a:'))return {voice:r.voice.slice(2),pitch};
+  if(r.voice==='auto'&&$('aiVoice').checked)return {voice:MALE_STYLES.includes(r.style)?'vi-VN-NamMinhNeural':'vi-VN-HoaiMyNeural',pitch};
+  return null;
+}
+function aiUrl(text,a){
+  const k=a.voice+'|'+a.pitch+'|'+text;
+  if(aiCache.has(k))return aiCache.get(k);
+  const p=fetch(`${srvBase()}/api/tts?voice=${a.voice}&pitch=${a.pitch}&text=${encodeURIComponent(text)}`,{headers:srvHead()})
+    .then(r=>{if(!r.ok)throw new Error('tts '+r.status);return r.blob()}).then(b=>URL.createObjectURL(b));
+  p.catch(()=>aiCache.delete(k));aiCache.set(k,p);
+  if(aiCache.size>300){const first=aiCache.keys().next().value;aiCache.delete(first)}
+  return p;
+}
+function playUrl(url,rate,done){
+  audioEl.onended=audioEl.onerror=null;audioEl.pause();
+  audioEl.src=url;audioEl.playbackRate=Math.max(0.5,Math.min(2,rate||1));
+  audioEl.onended=()=>done&&done();audioEl.onerror=()=>done&&done();
+  return audioEl.play();
+}
+function unlockAudio(){try{audioEl.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';audioEl.play().catch(()=>{})}catch(e){}}
+function sayDevice(text,roleIdx,rate,done){
+  const r=roles[roleIdx]||roles[0],sty=styleOf(roleIdx);
+  if(!hasSS){done&&done();return}
+  const u=new SpeechSynthesisUtterance(text);u.lang='vi-VN';
+  const v=r.voice.startsWith('d:')?devVoices.find(x=>'d:'+x.voiceURI===r.voice):bestVi();if(v){u.voice=v;u.lang=v.lang}
+  u.rate=Math.min(2,rate);u.pitch=sty.p;u.volume=sty.v;
+  if(done){u.onend=done;u.onerror=done}
+  speechSynthesis.cancel();speechSynthesis.speak(u);
+}
 function say(text,roleIdx,rate,done){
+  const a=aiFor(roleIdx);
+  if(a){
+    const tok=++aiTok;
+    aiUrl(text,a).then(url=>{if(tok!==aiTok)return;return playUrl(url,rate,done)})
+      .catch(()=>{if(tok===aiTok)sayDevice(text,roleIdx,rate,done)});
+    return;
+  }
+  return sayClassic(text,roleIdx,rate,done);
+}
+function sayClassic(text,roleIdx,rate,done){
   const r=roles[roleIdx]||roles[0],sty=styleOf(roleIdx);
   if(r.voice.startsWith('c:')&&tts){
     tts.speak(text,{voice:r.voice.slice(2),rate:Math.min(1.5,Math.max(0.7,rate)),language:'vi'}).then(done,done);return;
@@ -600,7 +652,9 @@ function onCue(i){
 function speak(i){
   speaking=i;const r=cues[i].role||0;duck(true,roles[r]?roles[r].name:'');showSub(i);
   say(cues[i].vi,r,rateFor(i),()=>done(i));
+  prefetchAI(i+1,3);
 }
+function prefetchAI(from,n){for(let k=from;k<Math.min(cues.length,from+n);k++){const c=cues[k],a=c&&c.vi&&aiFor(c.role||0);if(a)aiUrl(c.vi,a).catch(()=>{})}}
 function done(i){
   if(speaking!==i)return;speaking=-1;
   if(pending>=0){const n=pending;pending=-1;speak(n);if(holdPause){resuming=true;holdPause=false;P.play()}}
@@ -609,6 +663,7 @@ function done(i){
 function stopSpeech(keep){
   speaking=-1;interpSpeaking=false;if(!keep){pending=-1;holdPause=false}
   try{hasSS&&speechSynthesis.cancel()}catch(e){}try{tts&&tts.stop()}catch(e){}
+  aiTok++;try{audioEl.onended=audioEl.onerror=null;audioEl.pause()}catch(e){}
   if(P.has())duck(false);
 }
 
@@ -737,12 +792,13 @@ async function sendInterp(I,wav,t0){
   fd.append('file',wav,'clip.wav');if(I.lang)fd.append('lang',I.lang);
   fd.append('prev',JSON.stringify(I.prev.slice(-3)));fd.append('tone',$('tone').value);
   const c=$('ctx').value.trim();if(c)fd.append('context',c);
+  const ai=aiFor(0);if(ai){fd.append('voice',ai.voice);fd.append('pitch',ai.pitch)}
   let items=[];
   try{
     const r=await fetch(srvBase()+'/api/interpret',{method:'POST',headers:srvHead(),body:fd});
     if(!r.ok){I.errors++;st('sst','⚡ '+(await srvErr(r)),'er')}
     else{const j=await r.json();I.errors=0;if(j.language&&!I.lang)I.lang=langCode(j.language);
-      items=(j.items||[]).map(x=>({start:t0+x.start,end:t0+x.end,src:x.src,vi:x.vi||x.src,role:0}))}
+      items=(j.items||[]).map(x=>({start:t0+x.start,end:t0+x.end,src:x.src,vi:x.vi||x.src,role:0,audio:x.audio?URL.createObjectURL(new Blob([Uint8Array.from(atob(x.audio),ch=>ch.charCodeAt(0))],{type:'audio/mpeg'})):null}))}
   }catch(e){I.errors++;st('sst','⚡ Mạng chậm, đang thử tiếp…','er')}
   if(interp!==I)return;
   I.results[seq]=items;
@@ -763,7 +819,8 @@ function pumpInterp(I){
   st('sst',`⚡ Phiên dịch tức thời · giọng Việt trễ khoảng ${Math.round(lag)} giây`,'ok');
   const next=()=>{if(!interpSpeaking)return;interpSpeaking=false;clearTimeout(interpWatch);if(!I.queue.length){duck(false);showText('')}pumpInterp(I)};
   clearTimeout(interpWatch);interpWatch=setTimeout(next,(c.vi.length/CPS/rate)*1000+4000); // phòng khi trình duyệt không báo đọc xong
-  say(c.vi,c.role||0,rate,next);
+  if(c.audio){playUrl(c.audio,rate,next).catch(()=>sayDevice(c.vi,c.role||0,rate,next))}
+  else say(c.vi,c.role||0,rate,next);
 }
 
 /* ===== Tách âm thanh AAC từ MP4/MOV ngay trên máy (không cần tải cả video lên) ===== */

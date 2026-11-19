@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Lồng tiếng Việt cho YouTube
 // @namespace    https://github.com/iamboo98/longtieng
-// @version      1.3.0
+// @version      1.4.0
 // @description  Tự lồng tiếng Việt video YouTube: lấy phụ đề (tự dịch sang tiếng Việt nếu cần) và đọc bằng giọng Việt khớp theo video.
 // @author       iamboo98
 // @match        https://www.youtube.com/*
@@ -41,7 +41,7 @@
     ['gi', 'Người già', 0.7, 0.82], ['tt', 'Tin tức', 1.0, 1.12], ['kc', 'Kể chuyện', 0.9, 0.88],
     ['hh', 'Hào hứng', 1.25, 1.2], ['ht', 'Hoạt hình', 1.95, 1.15],
   ];
-  const DEF = { voice: 'auto', style: 'tn', rate: 1, duck: 0.1, sub: true, wait: true, source: 'auto', srv: '', key: '', groq: '' };
+  const DEF = { voice: 'auto', style: 'tn', rate: 1, duck: 0.1, sub: true, wait: true, source: 'auto', srv: '', key: '', groq: '', ai: true };
   let cfg = DEF;
   try { cfg = Object.assign({}, DEF, JSON.parse(localStorage.getItem('ltv_yt') || '{}')); } catch (e) {}
   const saveCfg = () => { try { localStorage.setItem('ltv_yt', JSON.stringify(cfg)); } catch (e) {} };
@@ -190,7 +190,29 @@
     try { video.volume = want; } catch (e) {}
     if (Math.abs(video.volume - want) > 0.02) video.muted = true; // iPhone không cho chỉnh âm lượng: tắt tiếng gốc
   }
+  const audioEl = new Audio(); try { audioEl.preservesPitch = true; } catch (e) {}
+  let aiTok = 0;
+  const MALE = ['nt', 'nm', 'gi', 'tt', 'kc'];
+  const aiVoice = () => (cfg.ai && cfg.srv.trim() ? { voice: MALE.includes(cfg.style) ? 'vi-VN-NamMinhNeural' : 'vi-VN-HoaiMyNeural', pitch: Math.round(Math.max(-50, Math.min(50, (styleOf()[2] - 1) * 45))) } : null);
+  function playUrl(url, rate, cb) {
+    audioEl.onended = audioEl.onerror = null; audioEl.pause();
+    audioEl.src = url; audioEl.playbackRate = Math.max(0.5, Math.min(2, rate || 1));
+    audioEl.onended = audioEl.onerror = cb;
+    return audioEl.play();
+  }
   function speakText(text, rate, cb) {
+    const a = aiVoice();
+    if (a) {
+      const tok = ++aiTok;
+      oFetch(`${srvBase()}/api/tts?voice=${a.voice}&pitch=${a.pitch}&text=${encodeURIComponent(text)}`, { headers: srvHead() })
+        .then((r) => { if (!r.ok) throw new Error(); return r.blob(); })
+        .then((b) => { if (tok === aiTok) return playUrl(URL.createObjectURL(b), rate, cb); })
+        .catch(() => { if (tok === aiTok) speakDevice(text, rate, cb); });
+      return;
+    }
+    speakDevice(text, rate, cb);
+  }
+  function speakDevice(text, rate, cb) {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'vi-VN'; const v = pickVoice(); if (v) { u.voice = v; u.lang = v.lang; }
     u.rate = Math.min(2, rate); u.pitch = styleOf()[2];
@@ -210,6 +232,7 @@
   function stopSpeech(keep) {
     speaking = -1; if (!keep) { pending = -1; holdPause = false; }
     try { hasSS && speechSynthesis.cancel(); } catch (e) {}
+    aiTok++; try { audioEl.onended = audioEl.onerror = null; audioEl.pause(); } catch (e) {}
     setVol(1);
   }
   function onCue(i) {
@@ -332,11 +355,12 @@
     const seq = I.seq++, fd = new FormData();
     fd.append('file', wav, 'clip.wav'); if (I.lang) fd.append('lang', I.lang);
     fd.append('prev', JSON.stringify(I.prev.slice(-3)));
+    const av = aiVoice(); if (av) { fd.append('voice', av.voice); fd.append('pitch', av.pitch); }
     let items = [];
     try {
       const j = await srvJSON('/api/interpret', { method: 'POST', body: fd });
       if (j.language && !I.lang) I.lang = LANGS[String(j.language).toLowerCase()] || null;
-      items = (j.items || []).map((x) => ({ start: t0 + x.start, end: t0 + x.end, src: x.src, text: x.vi || x.src }));
+      items = (j.items || []).map((x) => ({ start: t0 + x.start, end: t0 + x.end, src: x.src, text: x.vi || x.src, audio: x.audio ? URL.createObjectURL(new Blob([Uint8Array.from(atob(x.audio), (ch) => ch.charCodeAt(0))], { type: 'audio/mpeg' })) : null }));
     } catch (e) { setStatus('⚡ ' + (e.message || 'Mạng chậm…'), true); }
     if (interp !== I) return;
     I.results[seq] = items;
@@ -353,9 +377,10 @@
     setStatus(`⚡ Phiên dịch tức thời · giọng Việt trễ khoảng ${Math.round(lag)} giây`);
     const next = () => { if (!iSpeaking) return; iSpeaking = false; clearTimeout(iWatch); if (!I.queue.length) { setVol(1); showText(''); } pumpInterp(I); };
     clearTimeout(iWatch); iWatch = setTimeout(next, (c.text.length / CPS / rate) * 1000 + 4000);
-    speakText(c.text, rate, next);
+    if (c.audio) playUrl(c.audio, rate, next).catch(() => speakDevice(c.text, rate, next));
+    else speakText(c.text, rate, next);
   }
-  function interpPause() { if (interp) { interp.queue = []; interp.pcm = []; interp.len = 0; iSpeaking = false; try { speechSynthesis.cancel(); } catch (e) {} setVol(1); showText(''); } }
+  function interpPause() { if (interp) { interp.queue = []; interp.pcm = []; interp.len = 0; iSpeaking = false; try { speechSynthesis.cancel(); audioEl.pause(); } catch (e) {} setVol(1); showText(''); } }
 
   /* ---------- Đồng bộ theo video ---------- */
   const cueAt = (t) => { let lo = 0, hi = cues.length - 1, a = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (cues[m].start <= t) { a = m; lo = m + 1; } else hi = m - 1; } return a; };
@@ -379,6 +404,7 @@
     if (!id || !video) { setStatus('Hãy mở một video YouTube trước.', true); return; }
     if (!hasSS) { setStatus('Trình duyệt này không hỗ trợ đọc văn bản.', true); return; }
     try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {} // mở khoá âm thanh trên iPhone
+    try { audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; audioEl.play().catch(() => {}); } catch (e) {}
     btnMain.disabled = true;
     try {
       if (vid !== id || (!cues.length && !live && !interp)) {
@@ -491,6 +517,7 @@
     duck.value = String(cfg.duck); duck.onchange = () => { cfg.duck = +duck.value; saveCfg(); };
     const sub = el('input', { type: 'checkbox', checked: cfg.sub }); sub.onchange = () => { cfg.sub = sub.checked; saveCfg(); lastSub = -2; };
     const wait = el('input', { type: 'checkbox', checked: cfg.wait }); wait.onchange = () => { cfg.wait = wait.checked; saveCfg(); };
+    const ai = el('input', { type: 'checkbox', checked: cfg.ai }); ai.onchange = () => { cfg.ai = ai.checked; saveCfg(); };
     const close = el('button', { className: 'x', textContent: '✕' });
     const source = el('select'); [['auto', 'Phụ đề YouTube (không cần máy chủ)'], ['interp', '⚡ Phiên dịch tức thời (nghe tiếng video)'], ['server', 'Dịch trước bằng máy chủ (khớp nhất)']].forEach(([v, n]) => source.append(new Option(n, v)));
     source.value = cfg.source; source.onchange = () => { cfg.source = source.value; saveCfg(); if (running) stop(true); cues = []; vid = null; live = null; stopInterp(); };
@@ -510,6 +537,7 @@
       el('label', {}, 'Nguồn lời thoại', source),
       el('label', {}, rateLb, rate),
       el('label', {}, 'Âm gốc khi đang đọc', duck),
+      el('label', { className: 'c' }, ai, '🤖 Giọng AI tự nhiên (cần máy chủ)'),
       el('label', { className: 'c' }, sub, 'Hiện phụ đề tiếng Việt'),
       el('label', { className: 'c' }, wait, 'Tạm dừng video khi chưa đọc xong câu'),
       adv);

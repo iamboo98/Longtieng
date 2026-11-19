@@ -20,17 +20,20 @@ import socket
 import tempfile
 from urllib.parse import quote, urlparse
 
+import asyncio
+import base64
 import contextvars
 import json
 import subprocess
 import time
 
+import edge_tts
 import httpx
 import yt_dlp
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from starlette.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from starlette.background import BackgroundTask
 
 TOKEN = os.getenv("API_TOKEN", "")
@@ -121,7 +124,7 @@ def safe_name(s: str) -> str:
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN), "groq": bool(GROQ_KEY), "groq_from_app": True}
+    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN), "groq": bool(GROQ_KEY), "groq_from_app": True, "tts": True}
 
 
 @app.get("/api/info")
@@ -552,6 +555,42 @@ async def translate(req: Request):
     return {"items": await run_in_threadpool(run)}
 
 
+# ---------------------------------------------------------------------------
+# Giọng AI tiếng Việt (Microsoft Edge neural: HoaiMy nữ, NamMinh nam)
+# ---------------------------------------------------------------------------
+VOICES = {"vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"}
+
+
+async def synth(text: str, voice: str, pitch: int = 0, rate: int = 0) -> bytes:
+    if voice not in VOICES:
+        voice = "vi-VN-HoaiMyNeural"
+    c = edge_tts.Communicate(text, voice, rate=f"{max(-50, min(100, rate)):+d}%", pitch=f"{max(-50, min(50, pitch)):+d}Hz")
+    buf = bytearray()
+    async for ch in c.stream():
+        if ch.get("type") == "audio":
+            buf.extend(ch["data"])
+    if not buf:
+        raise HTTPException(502, "Không tạo được giọng đọc.")
+    return bytes(buf)
+
+
+@app.get("/api/tts")
+async def tts(req: Request, text: str, voice: str = "vi-VN-HoaiMyNeural", pitch: int = 0, rate: int = 0):
+    auth(req)
+    text = (text or "").strip()[:1000]
+    if not text:
+        raise HTTPException(400, "Thiếu nội dung cần đọc.")
+    for attempt in range(3):
+        try:
+            audio = await synth(text, voice, pitch, rate)
+            return Response(audio, media_type="audio/mpeg", headers={"Cache-Control": "public, max-age=86400"})
+        except HTTPException:
+            raise
+        except Exception:
+            await asyncio.sleep(0.5 * (attempt + 1))
+    raise HTTPException(502, "Dịch vụ giọng AI đang bận, thử lại sau.")
+
+
 # Câu Whisper hay "bịa" ra khi đoạn âm thanh gần như im lặng
 HALLU = re.compile(r"(subscribe|đăng ký kênh|cảm ơn các bạn đã (xem|theo dõi)|thanks for watching|thank you for watching|"
                    r"ご視聴ありがとう|字幕|amara\.org|點贊|订阅)", re.I)
@@ -559,7 +598,8 @@ HALLU = re.compile(r"(subscribe|đăng ký kênh|cảm ơn các bạn đã (xem|
 
 @app.post("/api/interpret")
 def interpret(req: Request, file: UploadFile = File(...), lang: str | None = Form(None), prev: str | None = Form(None),
-              tone: str | None = Form(None), context: str | None = Form(None)):
+              tone: str | None = Form(None), context: str | None = Form(None),
+              voice: str | None = Form(None), pitch: int = Form(0)):
     """Phiên dịch tức thời: nhận một đoạn âm thanh ngắn (vài giây), trả về lời gốc + bản dịch."""
     auth(req)
     need_groq(req)
@@ -594,6 +634,12 @@ def interpret(req: Request, file: UploadFile = File(...), lang: str | None = For
                     segs[int(o["id"])]["vi"] = str(o["vi"]).strip()
             for s in segs:
                 s.setdefault("vi", s["src"])
+        if voice:
+            async def all_audio():
+                return await asyncio.gather(*[synth(s["vi"], voice, pitch) for s in segs], return_exceptions=True)
+            for s, a in zip(segs, asyncio.run(all_audio())):
+                if isinstance(a, bytes):
+                    s["audio"] = base64.b64encode(a).decode()
         return {"language": language, "items": segs}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
