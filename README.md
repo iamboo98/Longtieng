@@ -1,3 +1,5 @@
+<p align="center"><img src="logo.svg" width="120" alt="Logo"></p>
+
 # Lồng tiếng Việt cho video
 
 Ứng dụng web chạy hoàn toàn trong trình duyệt: nạp video + phụ đề gốc, dịch sang tiếng Việt, rồi đọc giọng tiếng Việt khớp theo thời gian video.
@@ -7,7 +9,10 @@
 - Đọc phụ đề `.srt`, `.vtt` hoặc văn bản thường (tự chia đều theo thời lượng video)
 - Dịch sang tiếng Việt bằng Claude (khi mở trong Claude), chọn văn phong và bối cảnh
 - Sửa từng câu dịch, cảnh báo câu quá dài so với thời lượng
-- Lồng tiếng bằng giọng tiếng Việt của thiết bị (Web Speech API)
+- Nhiều nhân vật (tối đa 6), mỗi nhân vật chọn giọng và phong cách riêng: Tự nhiên, Nam trầm, Nam trẻ, Nữ trong trẻo, Nữ dịu dàng, Trẻ em, Người già, Tin tức, Kể chuyện, Hào hứng, Thì thầm, Hoạt hình, Robot
+- Chạm chấm màu ở đầu câu để đổi nhân vật; khi dịch bằng Claude có thể tự nhận biết người nói
+- Chọn mọi giọng tiếng Việt trên thiết bị (ưu tiên giọng tự nhiên ★), giọng đa ngôn ngữ và giọng Claude
+- Lồng tiếng bằng Web Speech API
   - Tự tăng tốc đọc để vừa khung thời gian
   - Tự hạ âm gốc khi có thoại
   - Tạm dừng video nếu câu trước đọc chưa xong
