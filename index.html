@@ -11,8 +11,9 @@
 :root{--bg:#0e1014;--p:#161920;--p2:#1d2129;--ln:#272c36;--tx:#eceff4;--mu:#8e97a6;--ac:#f5a524;--ac2:#ffd27a;--ok:#3ecf8e;--er:#ff6b6b}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 "Be Vietnam Pro",system-ui,sans-serif}
-.app{max-width:1100px;margin:0 auto;padding:12px;display:grid;grid-template-columns:1.3fr 1fr;gap:12px}
-@media(max-width:860px){.app{grid-template-columns:1fr;padding:10px}}
+.app{max-width:1100px;margin:0 auto;padding:12px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px}
+@media(max-width:860px){.app{grid-template-columns:minmax(0,1fr);padding:10px}}
+html,body{overflow-x:hidden}.left,.panel{min-width:0}
 .left{display:flex;flex-direction:column;gap:10px}
 .top{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
 .top .lg{width:30px;height:30px;display:block}.top .lg svg{width:100%;height:100%;display:block}
@@ -27,7 +28,7 @@ html,body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 "Be Vietn
 .live{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);border-radius:20px;padding:2px 9px;font-size:11px;display:none;align-items:center;gap:5px}
 .live i{width:7px;height:7px;border-radius:50%;background:var(--ac);animation:pl 1s infinite}@keyframes pl{50%{opacity:.3}}
 .bar{display:flex;gap:6px;align-items:center}
-.bar .st{flex:1;font-size:12px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .st{flex:1;min-width:0;font-size:12px;line-height:1.35;color:var(--mu);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 button{font:inherit;border:1px solid var(--ln);background:var(--p2);color:var(--tx);padding:8px 12px;border-radius:9px;cursor:pointer;font-weight:500;white-space:nowrap}
 button:disabled{opacity:.4;cursor:not-allowed}
 button.pr{background:var(--ac);border-color:var(--ac);color:#1a1000;font-weight:600}
@@ -400,7 +401,7 @@ async function dlLink(u){
     if(!$('srv').value.trim()){
       // Không có máy chủ: chỉ tải được link trực tiếp tới tệp video cho phép tải chéo
       if(ytId(u)||!/\.(mp4|webm|mov|m4v|mkv)(\?|$)/i.test(u)&&!/drive\.google|dropbox/i.test(u)){
-        show('Link này cần máy chủ tải video. Mở thẻ Cài đặt → Máy chủ tải video để thiết lập.','er');return}
+        show('Link này cần máy chủ tải video — hãy nhập địa chỉ máy chủ bên dưới.','er');document.querySelector('.tabs button[data-t=set]').click();const dt=$('srv').closest('details');dt.open=true;setTimeout(()=>dt.scrollIntoView({behavior:'smooth'}),50);return}
       show('Đang tải video…');
       const r=await fetch(directUrl(u));if(!r.ok)throw new Error('HTTP '+r.status);
       const b=await readWithProgress(r,(g,t)=>{fill.style.width=t?100*g/t+'%':'50%';show('Đang tải '+mb(g)+(t?' / '+mb(t):''))});
