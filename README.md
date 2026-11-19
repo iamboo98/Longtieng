@@ -5,7 +5,8 @@
 Ứng dụng web chạy hoàn toàn trong trình duyệt: nạp video + phụ đề gốc, dịch sang tiếng Việt, rồi đọc giọng tiếng Việt khớp theo thời gian video.
 
 ## Tính năng
-- Nạp video từ máy (MP4 / WebM / MOV)
+- Nạp video từ máy (MP4 / WebM / MOV) hoặc từ link: YouTube (video, Shorts), link trực tiếp tới tệp video, Google Drive, Dropbox
+- Tự hạ âm gốc khi lồng tiếng, kể cả trên iPhone (với video chọn từ máy)
 - Đọc phụ đề `.srt`, `.vtt` hoặc văn bản thường (tự chia đều theo thời lượng video)
 - Dịch sang tiếng Việt bằng Claude (khi mở trong Claude), chọn văn phong và bối cảnh
 - Sửa từng câu dịch, cảnh báo câu quá dài so với thời lượng
@@ -23,6 +24,9 @@
 Mở `index.html` bằng trình duyệt, hoặc bật **GitHub Pages** (Settings → Pages → Deploy from branch `main`, thư mục `/root`).
 
 ## Lưu ý
+- Link video và YouTube chỉ chạy trên bản GitHub Pages / mở trực tiếp `index.html`; bản mở trong Claude chỉ phát được video chọn từ máy.
+- TikTok, Facebook, Instagram không cho phát nhúng: hãy tải video về máy rồi chọn tệp.
+- Trên iPhone, với YouTube có thể cần chạm vào video một lần trước khi bấm Phát lồng tiếng.
 - Ngoài môi trường Claude, nút **Dịch bằng Claude** sẽ bị tắt. Bạn có thể nạp sẵn tệp SRT tiếng Việt hoặc sửa tay từng câu.
 - Cần cài giọng tiếng Việt cho thiết bị:
   - iPhone: Cài đặt → Trợ năng → Nội dung được đọc → Giọng nói → Tiếng Việt

@@ -18,6 +18,7 @@ html,body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 "Be Vietn
 .top .lg{width:30px;height:30px;display:block}.top .lg svg{width:100%;height:100%;display:block}
 .stage{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}
 .stage video{width:100%;height:100%;object-fit:contain;display:block}
+#yt{position:absolute;inset:0}#yt iframe{width:100%;height:100%;border:0;display:block}
 .empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--mu);cursor:pointer;text-align:center}
 .empty b{display:block;color:var(--tx);font-size:15px}
 .sub{position:absolute;left:4%;right:4%;bottom:7%;text-align:center;pointer-events:none}
@@ -75,6 +76,7 @@ details[open] summary{margin-bottom:8px}
     <div class="top"><span class="lg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"> <defs> <linearGradient id="lgbg" x1="0" y1="0" x2="1" y2="1"> <stop offset="0" stop-color="#FFB938"/> <stop offset="1" stop-color="#E5481B"/> </linearGradient> </defs> <rect width="512" height="512" rx="116" fill="url(#lgbg)"/> <path d="M96 150c0-30 24-54 54-54h170c30 0 54 24 54 54v130c0 30-24 54-54 54H214l-68 58c-8 7-20 1-20-9v-49h0c-17-9-30-28-30-54z" fill="#1A1000"/> <path d="M203 160c0-11 12-18 22-12l100 56c10 6 10 20 0 26l-100 56c-10 6-22-1-22-12z" fill="#FFD27A"/> <path d="M398 176c22 22 34 50 34 80s-12 58-34 80" fill="none" stroke="#1A1000" stroke-width="26" stroke-linecap="round"/> <path d="M444 136c32 32 50 74 50 120" fill="none" stroke="#1A1000" stroke-width="22" stroke-linecap="round" opacity=".55"/> </svg></span>Lồng tiếng Việt</div>
     <div class="stage">
       <video id="video" playsinline preload="metadata"></video>
+      <div id="yt" class="hide"><div id="ytp"></div></div>
       <div class="empty" id="empty"><div><b>＋ Chọn video</b>MP4 · WebM · MOV</div></div>
       <div class="sub" id="sub"></div>
       <div class="live" id="live"><i></i><span id="liveName">Đang lồng tiếng</span></div>
@@ -97,8 +99,14 @@ details[open] summary{margin-bottom:8px}
     <div class="pane on" id="p-sub">
       <div class="row">
         <button id="bVideo">🎬 Video</button>
-        <button id="bSub">📄 Tệp phụ đề</button>
+        <button id="bLink">🔗 Link</button>
+        <button id="bSub">📄 Phụ đề</button>
         <button id="bPaste">📝 Dán</button>
+      </div>
+      <div id="linkBox" class="hide">
+        <input type="text" id="linkTx" inputmode="url" placeholder="Dán link YouTube hoặc link tệp video (.mp4, .webm…)">
+        <div class="row" style="margin-top:6px"><button class="sm" id="useLink">Mở link</button></div>
+        <div class="hint" style="margin-top:4px">Hỗ trợ: YouTube (video, Shorts), link trực tiếp tới tệp video, Google Drive và Dropbox (tệp được chia sẻ công khai). TikTok, Facebook, Instagram: hãy tải video về máy rồi chọn 🎬 Video.</div>
       </div>
       <input type="file" id="fVideo" accept="video/*">
       <input type="file" id="fSub" accept=".srt,.vtt,.txt,text/plain">
@@ -159,7 +167,7 @@ details[open] summary{margin-bottom:8px}
 
 <script>
 (()=>{
-const $=id=>document.getElementById(id), video=$('video');
+const $=id=>document.getElementById(id);let video=$('video');
 const hasSS='speechSynthesis' in window;
 let cues=[], sample=null, tts=null, downloads=null;
 let spoken=new Set(), speaking=-1, pending=-1, holdPause=false, lastHi=-1, raf=0, vname='video';
@@ -224,7 +232,7 @@ function parseSubs(tx){
 }
 function plain(tx){
   const L=tx.split(/\n+/).map(s=>s.trim()).filter(Boolean);
-  const d=isFinite(video.duration)&&video.duration>0?video.duration:L.length*3,T=L.reduce((a,l)=>a+l.length,0)||1;let t=0;
+  const D=P.dur(),d=isFinite(D)&&D>0?D:L.length*3,T=L.reduce((a,l)=>a+l.length,0)||1;let t=0;
   return L.map(l=>{const x=d*l.length/T,c={start:t,end:t+x,src:l,vi:'',role:0};t+=x;return c});
 }
 const isVi=s=>/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(s);
@@ -241,7 +249,7 @@ $('bPaste').onclick=()=>$('pasteBox').classList.toggle('hide');
 $('fSub').onchange=async e=>{const f=e.target.files[0];if(!f)return;const t=await f.text();setCues(parseSubs(t)||plain(t),f.name);e.target.value=''};
 $('usePaste').onclick=()=>{
   const t=$('pasteTx').value.trim();if(!t)return;const p=parseSubs(t);
-  if(!p&&!(video.duration>0)){st('sst','Không có mốc thời gian — hãy chọn video trước để chia đều.','er');return}
+  if(!p&&!(P.dur()>0)){st('sst','Không có mốc thời gian — hãy chọn video trước để chia đều.','er');return}
   setCues(p||plain(t),p?'Đã đọc':'Chia đều theo video');$('pasteBox').classList.add('hide');
 };
 $('clr').onclick=()=>{cues=[];renderCues();refresh();save();st('sst','')};
@@ -259,7 +267,7 @@ function renderCues(){
     const tm=document.createElement('div');tm.className='tm';
     tm.innerHTML=`<span>${sh(c.start)}</span><span class="src"></span><span class="w"></span>`;
     tm.querySelector('.src').textContent=c.vi===c.src?'':c.src;
-    tm.onclick=()=>{if(video.src){video.currentTime=c.start+0.01;reset(c.start)}};
+    tm.onclick=()=>{if(P.has()){P.seek(c.start+0.01);reset(c.start)}};
     const ta=document.createElement('textarea');ta.rows=1;ta.value=c.vi;ta.placeholder='Bản dịch…';
     ta.oninput=()=>{c.vi=ta.value;warn(i);save();refresh()};
     d.append(rb,tm,ta);fr.append(d);
@@ -279,34 +287,127 @@ function showSub(i){
   if($('showOrig').checked&&c.vi&&c.vi!==c.src)h+=`<small><span>${esc(c.src)}</span></small>`;s.innerHTML=h;
 }
 function refresh(){
-  const v=!!video.src,hc=cues.length>0,hv=cues.some(c=>c.vi);
+  const v=P.has(),hc=cues.length>0,hv=cues.some(c=>c.vi);
   $('play').disabled=!(v&&hv);$('stop').disabled=!v;$('tr').disabled=!(hc&&sample);
   $('exp').disabled=!hv;$('cp').disabled=!hv;
   $('trBox').classList.toggle('hide',!sample&&!hc);
   if(!sample&&hc)st('tst','Dịch tự động chỉ có khi mở app trong Claude. Bạn có thể sửa tay từng câu hoặc nạp SRT tiếng Việt.');
 }
 
-/* ===== Video ===== */
-$('fVideo').onchange=e=>{
-  const f=e.target.files[0];if(!f)return;if(video.src)URL.revokeObjectURL(video.src);
-  video.src=URL.createObjectURL(f);vname=f.name.replace(/\.[^.]+$/,'');video.controls=true;$('empty').classList.add('hide');
-  st('vst',f.name,'ok');refresh();
+/* ===== Trình phát: tệp / link trực tiếp / YouTube ===== */
+const inClaude=!!(window.claude&&window.claude.use);
+let kind=null,yt=null,resuming=false,actx=null,gain=null,graphFor=null,lastT=0,lastW=0;
+const P={
+  has:()=>!!kind,
+  time:()=>kind==='yt'?(yt&&yt.getCurrentTime?yt.getCurrentTime()||0:0):video.currentTime,
+  dur:()=>kind==='yt'?(yt&&yt.getDuration?yt.getDuration()||0:0):video.duration,
+  paused:()=>kind==='yt'?!(yt&&yt.getPlayerState&&[1,3].includes(yt.getPlayerState())):video.paused,
+  ended:()=>kind==='yt'?!!(yt&&yt.getPlayerState&&yt.getPlayerState()===0):video.ended,
+  play:()=>{if(kind==='yt'){yt&&yt.playVideo&&yt.playVideo()}else video.play().catch(()=>{})},
+  pause:()=>{if(kind==='yt'){yt&&yt.pauseVideo&&yt.pauseVideo()}else video.pause()},
+  seek:t=>{if(kind==='yt'){yt&&yt.seekTo&&yt.seekTo(t,true)}else video.currentTime=t},
+  vol:v=>{
+    if(kind==='yt'){if(yt&&yt.setVolume){yt.setVolume(Math.round(v*100));v<0.03?yt.mute():yt.unMute()}return}
+    if(gain&&graphFor===video){gain.gain.value=v;video.volume=1}else{video.volume=v}
+  }
 };
-video.addEventListener('loadedmetadata',()=>st('vst',`${vname} · ${sh(video.duration)}`,'ok'));
-video.addEventListener('error',()=>st('vst','Không phát được định dạng này, thử MP4 (H.264).','er'));
-video.addEventListener('seeking',()=>reset(video.currentTime));
-video.addEventListener('play',()=>{if(!holdPause)loop()});
-video.addEventListener('pause',()=>{if(!holdPause)stopSpeech()});
-video.addEventListener('ended',()=>{stopSpeech();showSub(-1)});
-$('play').onclick=()=>{unlock();if(video.ended)video.currentTime=0;reset(video.currentTime);video.volume=+$('bg').value/100;video.play().catch(()=>{})};
-$('stop').onclick=()=>{holdPause=false;video.pause();stopSpeech()};
+function onPlay(){if(holdPause)return;if(kind==='yt'&&!resuming)reset(P.time());resuming=false;lastW=0;loop()}
+function onPause(){if(!holdPause)stopSpeech()}
+function onEnded(){stopSpeech();showSub(-1)}
+function bindVideo(el){
+  el.addEventListener('loadedmetadata',()=>st('vst',`${vname} · ${sh(el.duration)}`,'ok'));
+  el.addEventListener('error',()=>{if(kind!=='file'||!el.src)return;
+    st('vst',el.src.startsWith('blob:')?'Không phát được định dạng này, thử MP4 (H.264).'
+      :inClaude?'Bản mở trong Claude không phát được video từ link. Hãy mở bản GitHub Pages của app, hoặc tải video về máy.'
+      :'Không mở được link: link phải dẫn thẳng tới tệp video và cho phép xem công khai.','er')});
+  el.addEventListener('seeking',()=>{if(kind==='file')reset(el.currentTime)});
+  el.addEventListener('play',()=>{if(kind==='file')onPlay()});
+  el.addEventListener('pause',()=>{if(kind==='file')onPause()});
+  el.addEventListener('ended',()=>{if(kind==='file')onEnded()});
+}
+bindVideo(video);
+function newVideo(src){
+  if(video.src&&video.src.startsWith('blob:'))URL.revokeObjectURL(video.src);
+  const el=document.createElement('video');el.id='video';el.preload='metadata';el.playsInline=true;el.setAttribute('playsinline','');el.controls=true;
+  video.replaceWith(el);video=el;bindVideo(el);el.src=src;
+}
+function clearYT(){if(yt){try{yt.destroy()}catch(e){}yt=null}$('yt').innerHTML='<div id="ytp"></div>'}
+function showStage(k){stopSpeech();kind=k;$('empty').classList.add('hide');video.classList.toggle('hide',k!=='file');$('yt').classList.toggle('hide',k!=='yt');refresh()}
+// Âm thanh tệp trong máy đi qua Web Audio để hạ âm gốc được cả trên iPhone
+function ensureGraph(){
+  if(kind!=='file'||!video.src.startsWith('blob:'))return;
+  try{
+    if(!actx){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;actx=new AC();gain=actx.createGain();gain.connect(actx.destination)}
+    if(actx.state==='suspended')actx.resume();
+    if(graphFor!==video){actx.createMediaElementSource(video).connect(gain);graphFor=video}
+  }catch(e){}
+}
+$('fVideo').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;clearYT();
+  vname=f.name.replace(/\.[^.]+$/,'');newVideo(URL.createObjectURL(f));showStage('file');st('vst',f.name,'ok');e.target.value='';
+};
+$('bLink').onclick=()=>{$('linkBox').classList.toggle('hide');$('linkTx').focus()};
+$('useLink').onclick=()=>openLink($('linkTx').value.trim());
+$('linkTx').onkeydown=e=>{if(e.key==='Enter')openLink($('linkTx').value.trim())};
+const ytId=u=>{const m=u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/|v\/)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([\w-]{11})/);return m&&m[1]};
+function directUrl(u){
+  try{
+    const x=new URL(u);
+    if(/dropbox\.com$/.test(x.hostname)){x.searchParams.delete('dl');x.searchParams.set('raw','1');return x.href}
+    if(/drive\.google\.com$/.test(x.hostname)){const m=x.pathname.match(/\/file\/d\/([\w-]+)/);const id=m?m[1]:x.searchParams.get('id');if(id)return `https://drive.google.com/uc?export=download&id=${id}`}
+  }catch(e){}
+  return u;
+}
+function openLink(u){
+  if(!u)return;
+  if(!/^https?:\/\//i.test(u))u='https://'+u;
+  const id=ytId(u);
+  if(id){loadYT(id);$('linkBox').classList.add('hide');return}
+  if(/tiktok\.com|facebook\.com|fb\.watch|instagram\.com|twitter\.com|\/\/x\.com|douyin|bilibili|vimeo\.com|zalo/i.test(u)){
+    st('vst','Link mạng xã hội này không phát trực tiếp được. Hãy tải video về máy rồi chọn 🎬 Video.','er');return}
+  clearYT();
+  try{vname=decodeURIComponent(new URL(u).pathname.split('/').pop()).replace(/\.[^.]+$/,'')||'video'}catch(e){vname='video'}
+  newVideo(directUrl(u));showStage('file');st('vst','Đang tải video từ link…');$('linkBox').classList.add('hide');
+}
+let ytApi=null;
+function loadYTApi(){
+  if(window.YT&&YT.Player)return Promise.resolve();
+  if(ytApi)return ytApi;
+  ytApi=new Promise((res,rej)=>{
+    const prev=window.onYouTubeIframeAPIReady;window.onYouTubeIframeAPIReady=()=>{prev&&prev();res()};
+    const sc=document.createElement('script');sc.src='https://www.youtube.com/iframe_api';sc.onerror=rej;document.head.append(sc);
+    setTimeout(()=>rej(new Error('timeout')),12000);
+  });
+  ytApi.catch(()=>{ytApi=null});return ytApi;
+}
+async function loadYT(id){
+  st('vst','Đang mở YouTube…');
+  try{await loadYTApi()}catch(e){st('vst',inClaude?'Bản mở trong Claude không phát được YouTube. Hãy mở bản GitHub Pages của app.':'Không tải được trình phát YouTube, kiểm tra kết nối mạng.','er');return}
+  try{video.pause()}catch(e){}clearYT();vname='youtube-'+id;showStage('yt');
+  yt=new YT.Player('ytp',{videoId:id,width:'100%',height:'100%',
+    playerVars:{playsinline:1,rel:0,modestbranding:1,cc_load_policy:0,iv_load_policy:3},
+    events:{
+      onReady:()=>{st('vst',`YouTube · ${sh(P.dur())}`,'ok');P.vol(+$('bg').value/100);refresh()},
+      onStateChange:e=>{if(e.data===1)onPlay();else if(e.data===2)onPause();else if(e.data===0)onEnded()},
+      onError:e=>st('vst',[101,150].includes(e.data)?'Chủ video không cho phát nhúng. Hãy tải video về máy rồi chọn 🎬 Video.':'YouTube báo lỗi khi phát video này.','er')
+    }});
+}
+$('play').onclick=()=>{
+  unlock();ensureGraph();
+  if(P.ended())P.seek(0);
+  reset(P.time());P.vol(+$('bg').value/100);resuming=true;P.play();
+};
+$('stop').onclick=()=>{holdPause=false;P.pause();stopSpeech()};
 function reset(t){stopSpeech();spoken=new Set(cues.map((c,i)=>c.start<t-0.25?i:-1).filter(i=>i>=0))}
 function cueAt(t){let lo=0,hi=cues.length-1,a=-1;while(lo<=hi){const m=(lo+hi)>>1;if(cues[m].start<=t){a=m;lo=m+1}else hi=m-1}return a}
 function loop(){
   cancelAnimationFrame(raf);
   const tick=()=>{
-    if(video.paused&&!holdPause)return;
-    const t=video.currentTime,i=cueAt(t),inside=i>=0&&t<cues[i].end+0.3;
+    if(P.paused()&&!holdPause)return;
+    const t=P.time(),now=performance.now();
+    if(kind==='yt'&&!holdPause&&lastW&&(t<lastT-0.6||t-lastT>(now-lastW)/1000+1.5))reset(t);
+    lastT=t;lastW=holdPause?0:now;
+    const i=cueAt(t),inside=i>=0&&t<cues[i].end+0.3;
     hi(inside?i:-1);showSub(speaking>=0?speaking:(inside?i:-1));
     if(i>=0&&!spoken.has(i)&&t<cues[i].end){spoken.add(i);if(cues[i].vi)onCue(i)}
     raf=requestAnimationFrame(tick);
@@ -366,7 +467,7 @@ function rateFor(i){
   const nx=cues[i+1],slot=Math.max(0.6,(nx?Math.min(nx.start,c.end+1.2):c.end+1.2)-c.start),need=c.vi.length/CPS/base;
   return need>slot?base*need/slot:base;
 }
-function duck(on,name){video.volume=(on?+$('duck').value:+$('bg').value)/100;$('live').style.display=on?'flex':'none';if(name)$('liveName').textContent=name}
+function duck(on,name){if(P.has())P.vol((on?+$('duck').value:+$('bg').value)/100);$('live').style.display=on?'flex':'none';if(name)$('liveName').textContent=name}
 function say(text,roleIdx,rate,done){
   const r=roles[roleIdx]||roles[0],sty=styleOf(roleIdx);
   if(r.voice.startsWith('c:')&&tts){
@@ -384,7 +485,7 @@ function preview(i){
   say(`Xin chào, tôi là ${roles[i].name}. Đây là giọng ${sty.n.toLowerCase()}.`,i,+$('rate').value*sty.r);
 }
 function onCue(i){
-  if(speaking>=0){if($('wait').checked){pending=i;holdPause=true;video.pause();return}stopSpeech(true)}
+  if(speaking>=0){if($('wait').checked){pending=i;holdPause=true;P.pause();return}stopSpeech(true)}
   speak(i);
 }
 function speak(i){
@@ -393,19 +494,19 @@ function speak(i){
 }
 function done(i){
   if(speaking!==i)return;speaking=-1;
-  if(pending>=0){const n=pending;pending=-1;speak(n);if(holdPause){holdPause=false;video.play().catch(()=>{})}}
+  if(pending>=0){const n=pending;pending=-1;speak(n);if(holdPause){resuming=true;holdPause=false;P.play()}}
   else duck(false);
 }
 function stopSpeech(keep){
   speaking=-1;if(!keep){pending=-1;holdPause=false}
   try{hasSS&&speechSynthesis.cancel()}catch(e){}try{tts&&tts.stop()}catch(e){}
-  if(video.src)duck(false);
+  if(P.has())duck(false);
 }
 
 /* ===== Cài đặt ===== */
 [['rate',v=>v.toFixed(2).replace(/0$/,'')+'×'],['duck',v=>v+'%'],['bg',v=>v+'%']].forEach(([id,f])=>{
   const s=LS.get('ltv_'+id,null);if(s!==null)$(id).value=s;$(id+'V').textContent=f(+$(id).value);
-  $(id).oninput=()=>{const v=+$(id).value;$(id+'V').textContent=f(v);LS.set('ltv_'+id,v);if(id==='bg'&&speaking<0&&video.src)video.volume=v/100;if(id==='rate')cues.forEach((_,k)=>warn(k))};
+  $(id).oninput=()=>{const v=+$(id).value;$(id+'V').textContent=f(v);LS.set('ltv_'+id,v);if(id==='bg'&&speaking<0&&P.has())P.vol(v/100);if(id==='rate')cues.forEach((_,k)=>warn(k))};
 });
 
 /* ===== Dịch ===== */
