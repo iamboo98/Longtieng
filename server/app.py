@@ -9,6 +9,7 @@ Biến môi trường:
   MAX_FILESIZE_MB    dung lượng video tối đa. Mặc định 500.
   MAX_DURATION_MIN   thời lượng video tối đa (phút). Mặc định 90.
   COOKIES_FILE       đường dẫn tệp cookies.txt (giúp vượt kiểm tra "bot" của YouTube).
+  GROQ_API_KEY       mã API Groq (miễn phí) để nhận dạng giọng nói và dịch.
 """
 import glob
 import ipaddress
@@ -19,8 +20,13 @@ import socket
 import tempfile
 from urllib.parse import quote, urlparse
 
+import json
+import subprocess
+import time
+
+import httpx
 import yt_dlp
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from starlette.background import BackgroundTask
@@ -30,12 +36,14 @@ ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.
 MAX_MB = int(os.getenv("MAX_FILESIZE_MB", "500"))
 MAX_MIN = int(os.getenv("MAX_DURATION_MIN", "90"))
 COOKIES = os.getenv("COOKIES_FILE") or None
+GROQ_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ = "https://api.groq.com/openai/v1"
 
 app = FastAPI(title="Longtieng downloader")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGINS,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
     expose_headers=["Content-Disposition", "Content-Length", "X-Title", "X-Lang"],
 )
@@ -106,7 +114,7 @@ def safe_name(s: str) -> str:
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN)}
+    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN), "groq": bool(GROQ_KEY)}
 
 
 @app.get("/api/info")
@@ -227,6 +235,184 @@ def subs(req: Request, url: str, prefer: str = "vi"):
         return PlainTextResponse(text, headers={"X-Lang": lang + (" (tự động)" if is_auto else "")})
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Nhận dạng giọng nói (Groq Whisper) và dịch (Groq LLM)
+# ---------------------------------------------------------------------------
+def need_groq() -> None:
+    if not GROQ_KEY:
+        raise HTTPException(503, "Máy chủ chưa có GROQ_API_KEY. Thêm mã Groq trong Render → Environment.")
+
+
+def auth(req: Request) -> None:
+    if TOKEN and req.headers.get("x-api-key") != TOKEN:
+        raise HTTPException(401, "Sai mã truy cập máy chủ.")
+
+
+def to_audio_chunks(src: str, tmp: str, chunk_sec: int = 1200) -> list[tuple[str, float]]:
+    """Tách âm thanh mono 16 kHz, cắt mỗi đoạn 20 phút (giới hạn 25 MB/tệp của Groq miễn phí)."""
+    pattern = os.path.join(tmp, "a_%03d.mp3")
+    r = subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "32k",
+         "-f", "segment", "-segment_time", str(chunk_sec), "-reset_timestamps", "1", pattern],
+        capture_output=True, text=True, timeout=1800,
+    )
+    files = sorted(glob.glob(os.path.join(tmp, "a_*.mp3")))
+    if r.returncode != 0 or not files:
+        raise HTTPException(422, "Không tách được âm thanh: video không có tiếng hoặc định dạng lạ.")
+    return [(f, i * chunk_sec) for i, f in enumerate(files)]
+
+
+def whisper(path: str, lang: str | None) -> dict:
+    data = {"model": "whisper-large-v3-turbo", "response_format": "verbose_json", "temperature": "0"}
+    if lang:
+        data["language"] = lang
+    for attempt in range(4):
+        with open(path, "rb") as f:
+            r = httpx.post(f"{GROQ}/audio/transcriptions", headers={"Authorization": f"Bearer {GROQ_KEY}"},
+                           data=data, files={"file": (os.path.basename(path), f, "audio/mpeg")}, timeout=600)
+        if r.status_code == 429:
+            time.sleep(float(r.headers.get("retry-after", "10")) + 1)
+            continue
+        if r.status_code == 401:
+            raise HTTPException(502, "Mã GROQ_API_KEY không đúng.")
+        if r.status_code >= 400:
+            raise HTTPException(502, f"Groq báo lỗi khi nhận dạng giọng nói ({r.status_code}): {r.text[:200]}")
+        return r.json()
+    raise HTTPException(429, "Groq đang giới hạn lượt dùng, thử lại sau ít phút.")
+
+
+def transcribe_file(src: str, tmp: str, lang: str | None) -> dict:
+    segs, language = [], None
+    for path, offset in to_audio_chunks(src, tmp):
+        j = whisper(path, lang)
+        language = language or j.get("language")
+        for s in j.get("segments") or []:
+            t = (s.get("text") or "").strip()
+            if not t or s.get("no_speech_prob", 0) > 0.8:
+                continue
+            segs.append({"start": round(s["start"] + offset, 2), "end": round(s["end"] + offset, 2), "text": t})
+    if not segs:
+        raise HTTPException(422, "Không nghe thấy lời thoại nào trong video.")
+    return {"language": language, "segments": segs}
+
+
+@app.post("/api/transcribe")
+def transcribe_upload(req: Request, file: UploadFile = File(...), lang: str | None = None):
+    auth(req)
+    need_groq()
+    tmp = tempfile.mkdtemp(prefix="ltt_")
+    try:
+        src = os.path.join(tmp, "in" + (os.path.splitext(file.filename or "")[1] or ".mp4"))
+        size = 0
+        with open(src, "wb") as out:
+            while chunk := file.file.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_MB * 1024 * 1024:
+                    raise HTTPException(413, f"Video lớn hơn giới hạn {MAX_MB} MB.")
+                out.write(chunk)
+        return transcribe_file(src, tmp, lang)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@app.get("/api/transcribe")
+def transcribe_url(req: Request, url: str, lang: str | None = None):
+    guard(req, url)
+    need_groq()
+    tmp = tempfile.mkdtemp(prefix="ltu_")
+    try:
+        try:
+            i = get_info(url)
+        except yt_dlp.utils.DownloadError as e:
+            raise HTTPException(422, friendly(e))
+        check_limits(i)
+        opts = base_opts(tmp) | {"outtmpl": "src.%(ext)s", "format": "ba/b", "max_filesize": MAX_MB * 1024 * 1024}
+        try:
+            with yt_dlp.YoutubeDL(opts) as y:
+                y.download([i.get("webpage_url") or url])
+        except yt_dlp.utils.DownloadError as e:
+            raise HTTPException(422, friendly(e))
+        files = [f for f in glob.glob(os.path.join(tmp, "src.*")) if not f.endswith((".part", ".ytdl"))]
+        if not files:
+            raise HTTPException(422, "Không tải được âm thanh của video.")
+        return transcribe_file(files[0], tmp, lang)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+_llm_cache: dict = {}
+LLM_PREFER = [m.strip() for m in os.getenv(
+    "GROQ_LLM_MODELS", "openai/gpt-oss-120b,llama-3.3-70b-versatile,openai/gpt-oss-20b,llama-3.1-8b-instant").split(",") if m.strip()]
+
+
+def llm_model() -> str:
+    if _llm_cache.get("t", 0) > time.time() - 3600:
+        return _llm_cache["m"]
+    try:
+        r = httpx.get(f"{GROQ}/models", headers={"Authorization": f"Bearer {GROQ_KEY}"}, timeout=20)
+        ids = {m["id"] for m in r.json().get("data", [])}
+        m = next((x for x in LLM_PREFER if x in ids), LLM_PREFER[0])
+    except Exception:
+        m = LLM_PREFER[0]
+    _llm_cache.update(m=m, t=time.time())
+    return m
+
+
+def parse_json_array(text: str):
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```\w*\n?|```$", "", text).strip()
+    a, b = text.find("["), text.rfind("]")
+    if a < 0 or b < 0:
+        a, b = text.find("{"), text.rfind("}")
+    j = json.loads(text[a:b + 1])
+    if isinstance(j, dict):
+        j = next((v for v in j.values() if isinstance(v, list)), [])
+    return j
+
+
+@app.post("/api/translate")
+async def translate(req: Request):
+    auth(req)
+    need_groq()
+    body = await req.json()
+    items = body.get("items") or []
+    if not items or len(items) > 80:
+        raise HTTPException(400, "Mỗi lần dịch từ 1 đến 80 câu.")
+    roles = body.get("roles") or ""
+    prompt = (
+        "Bạn là biên dịch viên lồng tiếng chuyên nghiệp. Dịch các câu thoại sau sang tiếng Việt để đọc lồng tiếng.\n"
+        f"- Văn phong: {body.get('tone') or 'tự nhiên, như lời nói đời thường'}.\n"
+        + (f"- Bối cảnh: {body['context']}\n" if body.get("context") else "")
+        + "- Xưng hô phù hợp, nhất quán. Giữ nguyên tên riêng.\n"
+        "- Mỗi câu phải đọc vừa trong \"sec\" giây (~14 ký tự/giây): ngắn gọn, tự nhiên khi nói.\n"
+        "- Không thêm chú thích. Giữ đúng số câu và id.\n"
+        + (f"- Gán \"role\" là số nhân vật nói câu đó, chọn trong: {roles}. Không rõ thì 0.\n" if roles else "")
+        + (f"Các câu trước (tham khảo): {json.dumps(body.get('prev') or [], ensure_ascii=False)}\n" if body.get("prev") else "")
+        + f"Dữ liệu: {json.dumps(items, ensure_ascii=False)}\n\n"
+        + 'Chỉ trả về JSON dạng {"items":[{"id":số,"vi":"bản dịch"' + (',"role":số' if roles else "") + "}]}."
+    )
+    model = llm_model()
+    for attempt in range(4):
+        async with httpx.AsyncClient(timeout=120) as c:
+            r = await c.post(f"{GROQ}/chat/completions", headers={"Authorization": f"Bearer {GROQ_KEY}"}, json={
+                "model": model, "temperature": 0.3,
+                "response_format": {"type": "json_object"},
+                "messages": [{"role": "user", "content": prompt}],
+            })
+        if r.status_code == 429:
+            await __import__("asyncio").sleep(float(r.headers.get("retry-after", "8")) + 1)
+            continue
+        if r.status_code >= 400:
+            raise HTTPException(502, f"Groq báo lỗi khi dịch ({r.status_code}): {r.text[:200]}")
+        try:
+            out = parse_json_array(r.json()["choices"][0]["message"]["content"])
+            return {"items": [o for o in out if isinstance(o, dict) and "id" in o and "vi" in o], "model": model}
+        except Exception:
+            continue
+    raise HTTPException(502, "Không dịch được lúc này, thử lại sau.")
 
 
 @app.exception_handler(HTTPException)

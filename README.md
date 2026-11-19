@@ -44,6 +44,14 @@ Cài tiện ích **Tampermonkey** cho Chrome / Edge / Firefox, rồi mở link �
 - Trên iPhone, Safari không cho chỉnh nhỏ âm gốc, nên khi đang đọc âm gốc sẽ tắt hẳn.
 - Video không có phụ đề (kể cả phụ đề tự động) thì chưa lồng tiếng được.
 
+## Tự nghe & dịch video (không cần phụ đề)
+Trên bản GitHub Pages, khi bạn chọn video hoặc dán link, app tự động:
+1. Gửi video lên máy chủ → tách âm thanh → **Groq Whisper** nghe ra lời thoại kèm thời gian.
+2. Dịch sang tiếng Việt bằng mô hình ngôn ngữ của Groq (tự gán nhân vật theo người nói).
+3. Sẵn sàng lồng tiếng — bấm **▶ Phát lồng tiếng**.
+
+Cần đặt `GROQ_API_KEY` cho máy chủ: tạo tài khoản miễn phí tại <https://console.groq.com> → **API Keys** → **Create API Key**, rồi thêm vào Render → dịch vụ `longtieng-downloader` → **Environment**.
+
 ## Tải video từ link bất kỳ
 Nút **🔗 Link → ⬇ Tải video** tải video từ YouTube, TikTok, Facebook, Instagram, X và hơn 1000 trang khác, rồi tự lấy phụ đề có sẵn của video. Tính năng này cần **máy chủ tải video** (thư mục [`server/`](server/), dùng [yt-dlp](https://github.com/yt-dlp/yt-dlp)).
 
@@ -70,6 +78,7 @@ pip install -r requirements.txt && uvicorn app:app --port 8000
 | `ALLOWED_ORIGINS` | Trang web được phép gọi máy chủ | `*` |
 | `MAX_FILESIZE_MB` | Dung lượng video tối đa | 500 |
 | `MAX_DURATION_MIN` | Thời lượng tối đa (phút) | 90 |
+| `GROQ_API_KEY` | Mã API Groq (miễn phí) để tự nghe lời thoại và dịch | trống (tắt) |
 | `COOKIES_FILE` | Tệp cookies.txt, giúp vượt kiểm tra "bot" của YouTube | trống |
 
 ### Lưu ý

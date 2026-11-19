@@ -126,8 +126,10 @@ details[open] summary{margin-bottom:8px}
 
       <div id="trBox">
         <div class="row">
-          <button class="pr" id="tr" disabled>✨ Dịch sang tiếng Việt</button>
+          <button class="pr" id="auto" disabled>🪄 Tự nghe &amp; dịch video</button>
+          <button id="tr" disabled>✨ Dịch phụ đề</button>
         </div>
+        <label class="chk" style="margin-top:6px;font-size:12px"><input type="checkbox" id="autoRun" checked> Tự làm ngay khi chọn video mới</label>
         <details style="margin-top:6px">
           <summary>Tuỳ chọn dịch</summary>
           <div class="lbl">Bối cảnh video</div>
@@ -258,7 +260,7 @@ const isVi=s=>/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽế�
 function setCues(list,label){
   if(!list||!list.length){st('sst','Không đọc được câu thoại nào.','er');return}
   if(list.filter(c=>isVi(c.src)).length>list.length/2) list.forEach(c=>c.vi=c.src);
-  cues=list;spoken.clear();lastHi=-1;
+  cues=list;spoken.clear();lastHi=-1;cuesFor=srcRef?videoKey:null;
   st('sst',`${label} · ${list.length} câu${list[0].vi?' · đã là tiếng Việt':''}`,'ok');
   renderCues();refresh();save();
 }
@@ -307,10 +309,11 @@ function showSub(i){
 }
 function refresh(){
   const v=P.has(),hc=cues.length>0,hv=cues.some(c=>c.vi);
-  $('play').disabled=!(v&&hv);$('stop').disabled=!v;$('tr').disabled=!(hc&&sample);
+  const canTr=!!sample||hasSrv();
+  $('play').disabled=!(v&&hv);$('stop').disabled=!v;$('tr').disabled=!(hc&&canTr)||busy;
+  $('auto').disabled=!(v&&srcRef&&hasSrv())||busy;
   $('exp').disabled=!hv;$('cp').disabled=!hv;
-  $('trBox').classList.toggle('hide',!sample&&!hc);
-  if(!sample&&hc)st('tst','Dịch tự động chỉ có khi mở app trong Claude. Bạn có thể sửa tay từng câu hoặc nạp SRT tiếng Việt.');
+  if(!canTr&&!busy)st('tst',inClaude?'':'Muốn tự nghe và dịch video: thiết lập Máy chủ tải video trong thẻ Cài đặt.');
 }
 
 /* ===== Trình phát: tệp / link trực tiếp / YouTube ===== */
@@ -363,21 +366,22 @@ function ensureGraph(){
 }
 $('fVideo').onchange=e=>{
   const f=e.target.files[0];if(!f)return;clearYT();savedBlob=null;$('saveVid').classList.add('hide');
-  vname=f.name.replace(/\.[^.]+$/,'');newVideo(URL.createObjectURL(f));showStage('file');st('vst',f.name,'ok');e.target.value='';
+  vname=f.name.replace(/\.[^.]+$/,'');newVideo(URL.createObjectURL(f));showStage('file');st('vst',f.name,'ok');e.target.value='';newSource({file:f},'f:'+f.name);
 };
 $('bLink').onclick=()=>{$('linkBox').classList.toggle('hide');$('linkTx').focus()};
 $('useLink').onclick=()=>openLink($('linkTx').value.trim());
 $('dlLink').onclick=()=>dlLink($('linkTx').value.trim());
 /* ===== Tải video qua máy chủ ===== */
 $('srv').value=LS.get('ltv_srv','');$('srvKey').value=LS.get('ltv_srvKey','');
-$('srv').oninput=()=>LS.set('ltv_srv',$('srv').value.trim());$('srvKey').oninput=()=>LS.set('ltv_srvKey',$('srvKey').value.trim());
+$('srv').oninput=()=>{LS.set('ltv_srv',$('srv').value.trim());refresh()};$('srvKey').oninput=()=>LS.set('ltv_srvKey',$('srvKey').value.trim());
+const hasSrv=()=>!!$('srv').value.trim();
 const srvBase=()=>$('srv').value.trim().replace(/\/+$/,'').replace(/^(?!https?:\/\/)/,'https://');
 const srvHead=()=>{const k=$('srvKey').value.trim();return k?{'X-Api-Key':k}:{}};
 async function srvErr(r){try{const j=await r.json();return j.detail||('Lỗi '+r.status)}catch(e){return 'Lỗi máy chủ '+r.status}}
 $('srvTest').onclick=async()=>{
   if(!$('srv').value.trim()){st('srvSt','Nhập địa chỉ máy chủ trước.','er');return}
   st('srvSt','Đang kiểm tra… (máy chủ miễn phí có thể mất ~1 phút để thức dậy)');
-  try{const r=await fetch(srvBase()+'/api/health');const j=await r.json();st('srvSt',`Kết nối được · yt-dlp ${j.yt_dlp}${j.token?' · có mã truy cập':''}`,'ok')}
+  try{const r=await fetch(srvBase()+'/api/health');const j=await r.json();st('srvSt',`Kết nối được · yt-dlp ${j.yt_dlp}${j.token?' · có mã truy cập':''} · ${j.groq?'nghe & dịch: bật':'chưa có GROQ_API_KEY (chưa tự nghe & dịch được)'}`,j.groq?'ok':'er');refresh()}
   catch(e){st('srvSt',inClaude?'Bản trong Claude không gọi được máy chủ bên ngoài. Hãy dùng bản GitHub Pages.':'Không kết nối được máy chủ. Kiểm tra địa chỉ, hoặc ALLOWED_ORIGINS trên máy chủ.','er')}
 };
 let savedBlob=null;
@@ -414,16 +418,23 @@ async function dlLink(u){
     if(!r.ok){show(await srvErr(r),'er');return}
     const title=decodeURIComponent(r.headers.get('X-Title')||'video');
     const b=await readWithProgress(r,(g,t)=>{fill.style.width=t?15+85*g/t+'%':'60%';show('Đang nhận video '+mb(g)+(t?' / '+mb(t):''))});
+    srcRef={url:u};videoKey='u:'+u+':'+Date.now();
     useBlob(b,title);show(`${title} · ${mb(b.size)} · bấm 💾 để lưu`,'ok');$('linkBox').classList.add('hide');
+    let gotSubs=false;
     if($('dlSubs').checked){
       st('sst','Đang lấy phụ đề của video…');
       try{
         const s=await fetch(`${srvBase()}/api/subs?url=${encodeURIComponent(u)}&prefer=vi`,{headers:srvHead()});
         if(s.ok){const tx=await s.text(),list=parseSubs(tx);
-          if(list&&list.length)setCues(list,'Phụ đề '+(s.headers.get('X-Lang')||''));else st('sst','Phụ đề lấy về bị trống.','er')}
+          if(list&&list.length){setCues(list,'Phụ đề '+(s.headers.get('X-Lang')||''));gotSubs=true}else st('sst','Phụ đề lấy về bị trống.','er')}
         else st('sst',await srvErr(s),'er');
       }catch(e){st('sst','Không lấy được phụ đề.','er')}
     }
+    if($('autoRun').checked){
+      btn.disabled=false;
+      if(!gotSubs)autoDub();
+      else if(cues.some(c=>!c.vi)){busy=true;refresh();try{await translateAll()}finally{busy=false;refresh()}}
+    }else refresh();
   }catch(e){
     show(inClaude?'Bản trong Claude không tải được từ link. Hãy dùng bản GitHub Pages.':!$('srv').value.trim()?'Trang chứa video không cho tải trực tiếp. Hãy thiết lập máy chủ tải video trong Cài đặt.':'Mất kết nối với máy chủ: '+(e.message||e),'er');
   }finally{btn.disabled=false;setTimeout(()=>{pg.style.display='none'},600)}
@@ -447,12 +458,12 @@ function openLink(u){
   if(!u)return;
   if(!/^https?:\/\//i.test(u))u='https://'+u;
   const id=ytId(u);
-  if(id){loadYT(id);$('linkBox').classList.add('hide');return}
+  if(id){loadYT(id);$('linkBox').classList.add('hide');newSource({url:u},'u:'+u);return}
   if(/tiktok\.com|facebook\.com|fb\.watch|instagram\.com|twitter\.com|\/\/x\.com|douyin|bilibili|vimeo\.com|zalo/i.test(u)){
     st('vst','Link mạng xã hội này không phát trực tiếp được. Hãy tải video về máy rồi chọn 🎬 Video.','er');return}
   clearYT();
   try{vname=decodeURIComponent(new URL(u).pathname.split('/').pop()).replace(/\.[^.]+$/,'')||'video'}catch(e){vname='video'}
-  newVideo(directUrl(u));showStage('file');st('vst','Đang tải video từ link…');$('linkBox').classList.add('hide');
+  newVideo(directUrl(u));showStage('file');st('vst','Đang tải video từ link…');$('linkBox').classList.add('hide');newSource({url:u},'u:'+u);
 }
 let ytApi=null;
 function loadYTApi(){
@@ -594,19 +605,22 @@ function stopSpeech(keep){
   $(id).oninput=()=>{const v=+$(id).value;$(id+'V').textContent=f(v);LS.set('ltv_'+id,v);if(id==='bg'&&speaking<0&&P.has())P.vol(v/100);if(id==='rate')cues.forEach((_,k)=>warn(k))};
 });
 
-/* ===== Dịch ===== */
-$('tr').onclick=async()=>{
-  if(!sample)return;const btn=$('tr');btn.disabled=true;
+/* ===== Dịch (Claude khi mở trong Claude, máy chủ Groq khi chạy trên GitHub Pages) ===== */
+let busy=false;
+async function translateAll(){
+  if(!sample&&!hasSrv())return false;
   const pg=$('prog'),fill=pg.firstElementChild;pg.style.display='block';
   const ctx=$('ctx').value.trim(),tone=$('tone').value,autoRole=$('autoRole').checked;
   const todo=cues.map((_,i)=>i).filter(i=>!cues[i].vi||(cues[i].vi===cues[i].src&&!isVi(cues[i].src)));
   const roleList=roles.map((r,i)=>`${i}: ${r.name} (${styleOf(i).n})`).join('; ');
-  const N=25;let n=0;st('tst',`Đang dịch 0/${todo.length}…`);
+  const N=sample?25:40;let n=0,ok=true;st('tst',`Đang dịch 0/${todo.length}…`);
   try{
     for(let k=0;k<todo.length;k+=N){
       const ids=todo.slice(k,k+N),prev=cues.slice(Math.max(0,ids[0]-3),ids[0]).map(c=>c.src);
       const items=ids.map(i=>({id:i,sec:+(cues[i].end-cues[i].start).toFixed(1),text:cues[i].src}));
-      const prompt=`Bạn là biên dịch viên lồng tiếng chuyên nghiệp. Dịch các câu phụ đề sau sang tiếng Việt để đọc lồng tiếng.
+      let arr=[];
+      if(sample){
+        const prompt=`Bạn là biên dịch viên lồng tiếng chuyên nghiệp. Dịch các câu phụ đề sau sang tiếng Việt để đọc lồng tiếng.
 - Văn phong: ${tone}.${ctx?`\n- Bối cảnh: ${ctx}`:''}
 - Xưng hô phù hợp và nhất quán. Giữ nguyên tên riêng.
 - Mỗi câu phải đọc vừa trong "sec" giây (~14 ký tự/giây); ưu tiên ngắn gọn, tự nhiên khi nói.
@@ -615,21 +629,68 @@ $('tr').onclick=async()=>{
 ${prev.length?`Các câu trước (chỉ để tham khảo): ${JSON.stringify(prev)}\n`:''}Dữ liệu: ${JSON.stringify(items)}
 
 Chỉ trả về mảng JSON [{"id":số,"vi":"bản dịch"${autoRole?',"role":số':''}}].`;
-      let res;
-      try{res=await sample.json(prompt,{modelTier:'default'})}
-      catch(e){
-        if(e&&e.code==='rate_limited'){st('tst','Đang bị giới hạn tốc độ, chờ chút rồi bấm Dịch để tiếp tục.','er');break}
-        if(e&&e.code==='not_granted'){sample=null;break}throw e;
+        let res;
+        try{res=await sample.json(prompt,{modelTier:'default'})}
+        catch(e){
+          if(e&&e.code==='rate_limited'){st('tst','Đang bị giới hạn tốc độ, chờ chút rồi bấm Dịch để tiếp tục.','er');ok=false;break}
+          if(e&&e.code==='not_granted'){sample=null;ok=false;break}throw e;
+        }
+        arr=Array.isArray(res)?res:(res&&Array.isArray(res.items)?res.items:[]);
+      }else{
+        const r=await fetch(srvBase()+'/api/translate',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},srvHead()),
+          body:JSON.stringify({items,prev,tone,context:ctx,roles:autoRole?roleList:''})});
+        if(!r.ok){st('tst',await srvErr(r),'er');ok=false;break}
+        arr=(await r.json()).items||[];
       }
-      const arr=Array.isArray(res)?res:(res&&Array.isArray(res.items)?res.items:[]);
       arr.forEach(o=>{const c=o&&cues[o.id];if(!c||typeof o.vi!=='string')return;c.vi=o.vi.trim();if(autoRole&&Number.isInteger(o.role)&&o.role>=0&&o.role<roles.length)c.role=o.role});
       n+=ids.length;fill.style.width=100*n/todo.length+'%';st('tst',`Đang dịch ${Math.min(n,todo.length)}/${todo.length}…`);
       renderCues();save();
     }
-    if(n>=todo.length){const left=cues.filter(c=>!c.vi).length;st('tst',left?`Còn ${left} câu chưa dịch — bấm Dịch lại.`:'Đã dịch xong. Bấm ▶ Phát lồng tiếng.',left?'':'ok')}
-  }catch(e){st('tst','Lỗi khi dịch: '+(e&&e.message||e)+'. Bấm Dịch để tiếp tục.','er')}
+    if(ok){const left=cues.filter(c=>!c.vi).length;st('tst',left?`Còn ${left} câu chưa dịch — bấm Dịch lại.`:'Đã dịch xong. Bấm ▶ Phát lồng tiếng.',left?'':'ok');ok=!left}
+  }catch(e){st('tst','Lỗi khi dịch: '+(e&&e.message||e)+'. Bấm Dịch để tiếp tục.','er');ok=false}
   setTimeout(()=>{pg.style.display='none';fill.style.width=0},800);refresh();
-};
+  return ok;
+}
+$('tr').onclick=async()=>{busy=true;refresh();try{await translateAll()}finally{busy=false;refresh()}};
+
+/* ===== Tự nghe lời thoại (Groq Whisper qua máy chủ) ===== */
+let srcRef=null,cuesFor=LS.get('ltv_cues',[]).length?'old':null,videoKey=null;
+$('autoRun').checked=LS.get('ltv_autoRun',true);$('autoRun').onchange=()=>LS.set('ltv_autoRun',$('autoRun').checked);
+function newSource(ref,key){srcRef=ref;videoKey=key+':'+Date.now();refresh();
+  if($('autoRun').checked&&hasSrv()&&!(cues.length&&cuesFor===null))autoDub();}
+function xhrUpload(url,form,onP){return new Promise((res,rej)=>{
+  const x=new XMLHttpRequest();x.open('POST',url);const k=$('srvKey').value.trim();if(k)x.setRequestHeader('X-Api-Key',k);
+  x.upload.onprogress=e=>{if(e.lengthComputable)onP(e.loaded/e.total)};
+  x.onload=()=>{let j=null;try{j=JSON.parse(x.responseText)}catch(e){}x.status<300&&j?res(j):rej(new Error(j&&j.detail||('Lỗi máy chủ '+x.status)))};
+  x.onerror=()=>rej(new Error('Mất kết nối với máy chủ.'));x.send(form);
+})}
+async function autoDub(){
+  if(busy||!srcRef)return;
+  if(!hasSrv()){st('sst','Cần thiết lập Máy chủ tải video trong thẻ Cài đặt.','er');return}
+  busy=true;refresh();
+  const pg=$('prog'),fill=pg.firstElementChild;pg.style.display='block';fill.style.width='3%';
+  const myKey=videoKey;
+  try{
+    let j;
+    if(srcRef.file){
+      const fd=new FormData();fd.append('file',srcRef.file,srcRef.file.name||'video.mp4');
+      st('sst','Đang gửi video lên máy chủ… 0%');
+      j=await xhrUpload(srvBase()+'/api/transcribe',fd,f=>{fill.style.width=5+45*f+'%';st('sst',f<1?`Đang gửi video lên máy chủ… ${Math.round(f*100)}%`:'Máy chủ đang nghe lời thoại… (khoảng 1 phút cho 10 phút video)')});
+    }else{
+      st('sst','Máy chủ đang tải âm thanh và nghe lời thoại… (lần đầu có thể mất thêm ~1 phút)');fill.style.width='30%';
+      const r=await fetch(`${srvBase()}/api/transcribe?url=${encodeURIComponent(srcRef.url)}`,{headers:srvHead()});
+      if(!r.ok)throw new Error(await srvErr(r));j=await r.json();
+    }
+    if(myKey!==videoKey)return;
+    fill.style.width='55%';
+    const list=(j.segments||[]).map(x=>({start:x.start,end:x.end,src:x.text,vi:'',role:0}));
+    setCues(list,`Nghe được lời thoại${j.language?' ('+j.language+')':''}`);cuesFor=myKey;
+    if(cues.some(c=>!c.vi)){busy=false;await translateAll()}
+    else st('tst','Video đã là tiếng Việt, sẵn sàng lồng tiếng.','ok');
+  }catch(e){st('sst',inClaude?'Bản trong Claude không gọi được máy chủ. Hãy dùng bản GitHub Pages.':(e.message||String(e)),'er')}
+  finally{busy=false;pg.style.display='none';refresh()}
+}
+$('auto').onclick=autoDub;
 
 /* ===== Xuất ===== */
 const toSRT=()=>cues.filter(c=>c.vi).map((c,i)=>`${i+1}\n${fmt(c.start)} --> ${fmt(c.end)}\n${c.vi}\n`).join('\n');
