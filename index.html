@@ -141,6 +141,7 @@ details[open] summary{margin-bottom:8px}
           <input type="text" id="ctx" placeholder="VD: phim hoạt hình, vlog nấu ăn…">
           <div class="lbl" style="margin-top:6px">Văn phong</div>
           <select id="tone">
+            <option value="">🎯 Tự động theo thể loại video</option>
             <option value="tự nhiên, như lời nói đời thường">Tự nhiên</option>
             <option value="trang trọng, lịch sự">Trang trọng</option>
             <option value="kiểu lồng tiếng phim, giàu cảm xúc">Lồng tiếng phim</option>
@@ -170,6 +171,7 @@ details[open] summary{margin-bottom:8px}
       <div><div class="lbl"><span>Âm gốc khi có lồng tiếng</span><b id="duckV">10%</b></div><input type="range" id="duck" min="0" max="100" step="5" value="10"></div>
       <div><div class="lbl"><span>Âm gốc khi không có thoại</span><b id="bgV">70%</b></div><input type="range" id="bg" min="0" max="100" step="5" value="70"></div>
       <label class="chk"><input type="checkbox" id="aiVoice" checked> 🤖 Giọng AI tự nhiên (HoaiMy, NamMinh) — cần máy chủ</label>
+      <label class="chk"><input type="checkbox" id="autoCast" checked> 🎭 Đạo diễn tự động: nghe giọng gốc để chọn giọng nam / nữ / trẻ em cho từng người nói, đọc theo cảm xúc từng câu</label>
       <label class="chk"><input type="checkbox" id="autoRate" checked> Tự tăng tốc để vừa thời lượng câu</label>
       <label class="chk"><input type="checkbox" id="wait" checked> Tạm dừng video khi câu trước chưa đọc xong</label>
       <label class="chk"><input type="checkbox" id="showOrig"> Hiện cả phụ đề gốc</label>
@@ -586,6 +588,15 @@ function duck(on,name){if(P.has())P.vol((on?+$('duck').value:+$('bg').value)/100
 const audioEl=new Audio();audioEl.preload='auto';try{audioEl.preservesPitch=true}catch(e){}
 const aiCache=new Map();let aiTok=0;
 $('aiVoice').checked=LS.get('ltv_ai',true);$('aiVoice').onchange=()=>LS.set('ltv_ai',$('aiVoice').checked);
+$('autoCast').checked=LS.get('ltv_cast',true);$('autoCast').onchange=()=>LS.set('ltv_cast',$('autoCast').checked);
+$('tone').value=LS.get('ltv_tone','');$('tone').onchange=()=>LS.set('ltv_tone',$('tone').value);
+// Đạo diễn tự động: chỉ khi nhân vật để giọng "Tự động" và đang dùng giọng AI
+const castOn=roleIdx=>$('autoCast').checked&&$('aiVoice').checked&&hasSrv()&&(roles[roleIdx||0]||roles[0]).voice==='auto';
+const G_ROLE={m:1,f:2,c:3};
+const roleOfG=g=>{const r=G_ROLE[g];return r!==undefined&&r<roles.length?r:0};
+let profile=null;
+function showProfile(p){if(!p||!p.genre||(profile&&profile.genre===p.genre&&profile.tone===p.tone))return;profile=p;
+  st('tst',`🎯 Video: ${p.genre}${p.summary?' — '+p.summary:''} · văn phong: ${p.tone||'tự nhiên'}`,'ok')}
 function aiFor(roleIdx){
   const r=roles[roleIdx]||roles[0];
   if(!hasSrv())return null;
@@ -595,9 +606,9 @@ function aiFor(roleIdx){
   return null;
 }
 function aiUrl(text,a){
-  const k=a.voice+'|'+a.pitch+'|'+text;
+  const k=a.voice+'|'+a.pitch+'|'+(a.rate||0)+'|'+(a.volume||0)+'|'+text;
   if(aiCache.has(k))return aiCache.get(k);
-  const p=fetch(`${srvBase()}/api/tts?voice=${a.voice}&pitch=${a.pitch}&text=${encodeURIComponent(text)}`,{headers:srvHead()})
+  const p=fetch(`${srvBase()}/api/tts?voice=${a.voice}&pitch=${a.pitch}&rate=${a.rate||0}&volume=${a.volume||0}&text=${encodeURIComponent(text)}`,{headers:srvHead()})
     .then(r=>{if(!r.ok)throw new Error('tts '+r.status);return r.blob()}).then(b=>URL.createObjectURL(b));
   p.catch(()=>aiCache.delete(k));aiCache.set(k,p);
   if(aiCache.size>300){const first=aiCache.keys().next().value;aiCache.delete(first)}
@@ -651,10 +662,15 @@ function onCue(i){
 }
 function speak(i){
   speaking=i;const r=cues[i].role||0;duck(true,roles[r]?roles[r].name:'');showSub(i);
-  say(cues[i].vi,r,rateFor(i),()=>done(i));
+  const c=cues[i],a=cueAI(c);
+  if(a){const tok=++aiTok;
+    aiUrl(c.vi,a).then(url=>{if(tok===aiTok)return playUrl(url,+$('rate').value,()=>done(i))}).catch(()=>{if(tok===aiTok)sayDevice(c.vi,r,rateFor(i),()=>done(i))});
+  }else say(c.vi,r,rateFor(i),()=>done(i));
   prefetchAI(i+1,3);
 }
-function prefetchAI(from,n){for(let k=from;k<Math.min(cues.length,from+n);k++){const c=cues[k],a=c&&c.vi&&aiFor(c.role||0);if(a)aiUrl(c.vi,a).catch(()=>{})}}
+// Giọng do "đạo diễn" trên máy chủ chọn (đã tính sẵn tốc độ vừa khung câu)
+function cueAI(c){return c&&c.tts&&c.tts.voice&&castOn(c.role||0)?c.tts:null}
+function prefetchAI(from,n){for(let k=from;k<Math.min(cues.length,from+n);k++){const c=cues[k],a=c&&c.vi&&(cueAI(c)||aiFor(c.role||0));if(a)aiUrl(c.vi,a).catch(()=>{})}}
 function done(i){
   if(speaking!==i)return;speaking=-1;
   if(pending>=0){const n=pending;pending=-1;speak(n);if(holdPause){resuming=true;holdPause=false;P.play()}}
@@ -678,14 +694,14 @@ let busy=false;
 async function translateAll(only,quiet){
   if(!sample&&!hasSrv())return false;
   const pg=$('prog'),fill=pg.firstElementChild;if(!quiet)pg.style.display='block';
-  const ctx=$('ctx').value.trim(),tone=$('tone').value,autoRole=$('autoRole').checked;
+  const ctx=$('ctx').value.trim(),tone=$('tone').value||(profile&&profile.tone)||'phù hợp với thể loại và nội dung video',autoRole=$('autoRole').checked;
   const todo=(only||cues.map((_,i)=>i)).filter(i=>cues[i]&&(!cues[i].vi||(cues[i].vi===cues[i].src&&!isVi(cues[i].src))));
   const roleList=roles.map((r,i)=>`${i}: ${r.name} (${styleOf(i).n})`).join('; ');
   const N=sample?25:40;let n=0,ok=true;if(!quiet)st('tst',`Đang dịch 0/${todo.length}…`);
   try{
     for(let k=0;k<todo.length;k+=N){
       const ids=todo.slice(k,k+N),prev=cues.slice(Math.max(0,ids[0]-3),ids[0]).map(c=>c.src);
-      const items=ids.map(i=>({id:i,sec:+(cues[i].end-cues[i].start).toFixed(1),text:cues[i].src}));
+      const items=ids.map(i=>{const c=cues[i],o={id:i,sec:+(c.end-c.start).toFixed(1),text:c.src};if(c.f0){o.f0=c.f0;o.db=c.db}return o});
       let arr=[];
       if(sample){
         const prompt=`Bạn là biên dịch viên lồng tiếng chuyên nghiệp. Dịch các câu phụ đề sau sang tiếng Việt để đọc lồng tiếng.
@@ -706,11 +722,13 @@ Chỉ trả về mảng JSON [{"id":số,"vi":"bản dịch"${autoRole?',"role":
         arr=Array.isArray(res)?res:(res&&Array.isArray(res.items)?res.items:[]);
       }else{
         const r=await fetch(srvBase()+'/api/translate',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},srvHead()),
-          body:JSON.stringify({items,prev,tone,context:ctx,roles:autoRole?roleList:''})});
+          body:JSON.stringify({items,prev,tone:$('tone').value,context:ctx,roles:autoRole&&!$('autoCast').checked?roleList:'',session:videoKey||'',title:vname,direct:$('autoCast').checked?'auto':''})});
         if(!r.ok){st('tst',await srvErr(r),'er');ok=false;break}
-        arr=(await r.json()).items||[];
+        const jr=await r.json();arr=jr.items||[];showProfile(jr.profile);
       }
-      arr.forEach(o=>{const c=o&&cues[o.id];if(!c||typeof o.vi!=='string')return;c.vi=o.vi.trim();if(autoRole&&Number.isInteger(o.role)&&o.role>=0&&o.role<roles.length)c.role=o.role});
+      arr.forEach(o=>{const c=o&&cues[o.id];if(!c||typeof o.vi!=='string')return;c.vi=o.vi.trim();if(o.emo)c.emo=o.emo;
+        if(o.tts){c.tts=o.tts;if(autoRole)c.role=roleOfG(o.tts.g)}
+        else if(autoRole&&Number.isInteger(o.role)&&o.role>=0&&o.role<roles.length)c.role=o.role});
       n+=ids.length;if(!quiet){fill.style.width=100*n/todo.length+'%';st('tst',`Đang dịch ${Math.min(n,todo.length)}/${todo.length}…`)}
       if(!quiet)renderCues();save();
     }
@@ -792,13 +810,14 @@ async function sendInterp(I,wav,t0){
   fd.append('file',wav,'clip.wav');if(I.lang)fd.append('lang',I.lang);
   fd.append('prev',JSON.stringify(I.prev.slice(-3)));fd.append('tone',$('tone').value);
   const c=$('ctx').value.trim();if(c)fd.append('context',c);
-  const ai=aiFor(0);if(ai){fd.append('voice',ai.voice);fd.append('pitch',ai.pitch)}
+  fd.append('session',I.key||'');fd.append('title',vname||'');
+  const ai=aiFor(0);if(castOn(0))fd.append('voice','auto');else if(ai){fd.append('voice',ai.voice);fd.append('pitch',ai.pitch)}
   let items=[];
   try{
     const r=await fetch(srvBase()+'/api/interpret',{method:'POST',headers:srvHead(),body:fd});
     if(!r.ok){I.errors++;st('sst','⚡ '+(await srvErr(r)),'er')}
-    else{const j=await r.json();I.errors=0;if(j.language&&!I.lang)I.lang=langCode(j.language);
-      items=(j.items||[]).map(x=>({start:t0+x.start,end:t0+x.end,src:x.src,vi:x.vi||x.src,role:0,audio:x.audio?URL.createObjectURL(new Blob([Uint8Array.from(atob(x.audio),ch=>ch.charCodeAt(0))],{type:'audio/mpeg'})):null}))}
+    else{const j=await r.json();I.errors=0;if(j.language&&!I.lang)I.lang=langCode(j.language);showProfile(j.profile);
+      items=(j.items||[]).map(x=>({start:t0+x.start,end:t0+x.end,src:x.src,vi:x.vi||x.src,role:x.tts&&castOn(0)?roleOfG(x.tts.g):0,tts:x.tts,emo:x.emo,audio:x.audio?URL.createObjectURL(new Blob([Uint8Array.from(atob(x.audio),ch=>ch.charCodeAt(0))],{type:'audio/mpeg'})):null}))}
   }catch(e){I.errors++;st('sst','⚡ Mạng chậm, đang thử tiếp…','er')}
   if(interp!==I)return;
   I.results[seq]=items;
@@ -813,7 +832,7 @@ function pumpInterp(I){
   if(!I.queue.length){duck(false);return}
   let c=I.queue.shift();
   while(I.queue.length&&video.currentTime-c.end>15)c=I.queue.shift(); // tụt quá xa thì bỏ bớt
-  const lag=Math.max(0,video.currentTime-c.start),base=+$('rate').value*styleOf(c.role||0).r;
+  const lag=Math.max(0,video.currentTime-c.start),base=+$('rate').value*(c.audio&&c.tts?1:styleOf(c.role||0).r);
   const rate=Math.min(1.9,base*(1+0.15*I.queue.length+(lag>7?0.15:0)));
   interpSpeaking=true;duck(true,roles[c.role||0]?roles[c.role||0].name:'');showText(c.vi,c.src);hi(cues.indexOf(c));
   st('sst',`⚡ Phiên dịch tức thời · giọng Việt trễ khoảng ${Math.round(lag)} giây`,'ok');
@@ -968,7 +987,7 @@ async function liveLoop(){
       if(!r.ok){const m=await srvErr(r);if(r.status===404){st('sst',m,'er');live=null;return}throw new Error(m)}
       const j=await r.json();if(live!==L)return;
       if(j.language&&!L.lang)L.lang=langCode(j.language);
-      const add=(j.segments||[]).map(x=>({start:x.start,end:x.end,src:x.text,vi:'',role:0}));
+      const add=(j.segments||[]).map(x=>({start:x.start,end:x.end,src:x.text,vi:'',role:0,f0:x.f0,db:x.db}));
       if(add.length){
         if(isViLang(L.lang)||add.every(c=>isVi(c.src)))add.forEach(c=>c.vi=c.src);
         const base=cues.length;cues.push(...add);cues.sort((a,b)=>a.start-b.start);

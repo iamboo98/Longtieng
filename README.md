@@ -44,6 +44,27 @@ Cài tiện ích **Tampermonkey** cho Chrome / Edge / Firefox, rồi mở link �
 - Trên iPhone, Safari không cho chỉnh nhỏ âm gốc, nên khi đang đọc âm gốc sẽ tắt hẳn.
 - Video không có phụ đề (kể cả phụ đề tự động) thì chưa lồng tiếng được.
 
+## 🎭 Đạo diễn lồng tiếng tự động (sát tính chất và nội dung video)
+Khi dùng máy chủ, mỗi video được "đạo diễn" tự động để giọng Việt khớp với video gốc:
+- **Hiểu video**: sau vài câu đầu, máy chủ phân tích tiêu đề + lời thoại để biết thể loại (phim, hoạt hình, tin tức, vlog, review, game, bài giảng…), văn phong nên dùng, cách xưng hô giữa các nhân vật / với khán giả, và thuật ngữ cần dịch thống nhất. Toàn bộ phần dịch sau đó theo "hồ sơ" này. App hiện hồ sơ ở dòng 🎯.
+- **Đúng người nói**: đo cao độ giọng gốc từng câu → nam dùng NamMinh, nữ dùng HoaiMy, trẻ em giọng cao hơn. Các người nói khác nhau (cùng giới) được tách ra và giữ một giọng riêng (cao độ, nhịp khác nhau) suốt video.
+- **Đúng cảm xúc**: mỗi câu được gán cảm xúc (vui, hào hứng, buồn, giận, sợ, ngạc nhiên, thì thầm, nghiêm túc, dịu dàng, mỉa mai, hét) → đổi tốc độ, cao độ, âm lượng. Câu gốc nói to thì giọng Việt cũng to hơn.
+- **Đúng nhịp**: tin tức, thể thao đọc nhanh hơn; tài liệu, kể chuyện chậm hơn; mỗi câu được tự tăng tốc vừa với thời lượng câu gốc ngay khi tạo giọng (không méo tiếng).
+
+Bật / tắt: **Cài đặt → 🎭 Đạo diễn tự động** (app web), hoặc ô 🎭 trong bảng tiện ích. Chỉ áp dụng cho nhân vật để giọng **Tự động**; muốn tự chọn giọng thì chọn giọng cụ thể cho nhân vật. **Văn phong → 🎯 Tự động theo thể loại video** là mặc định; chọn văn phong khác để ghi đè.
+
+## 🌐 Lồng tiếng trên mọi trang web (userscript)
+Tiện ích [`userscript/longtieng-web.user.js`](userscript/longtieng-web.user.js) chạy trên mọi trang có video (Facebook, TikTok, Vimeo, Bilibili, báo điện tử, khoá học online…): nút 🎙️ hiện ở góc khi trang có video, bấm **Bắt đầu lồng tiếng** là video được nghe, dịch và đọc giọng Việt ngay khi đang xem.
+
+- **Cài**: Tampermonkey (máy tính) hoặc app Userscripts (iPhone/iPad), mở <https://raw.githubusercontent.com/iamboo98/longtieng/main/userscript/longtieng-web.user.js> → **Install**. Khi Tampermonkey hỏi quyền kết nối tới máy chủ, chọn **Always allow**.
+- Nhập địa chỉ máy chủ, mã truy cập và mã Groq một lần ở **Cài đặt máy chủ** — dùng chung cho mọi trang.
+- **Cách lấy lời thoại**:
+  - *Nghe tiếng video đang phát* (⚡, trễ 3–5 giây): dùng được với hầu hết trình phát web.
+  - *Máy chủ lấy từ link trang* (khớp nhất): máy chủ tự tải âm thanh từ địa chỉ trang bằng yt-dlp và dịch trước. Dùng khi trang không cho nghe tiếng video.
+  - *Tự động*: thử nghe trước, không được thì nhờ máy chủ.
+- Video có DRM (Netflix, Disney+, …) không nghe được tiếng và yt-dlp cũng không tải được, nên chưa hỗ trợ.
+- YouTube dùng tiện ích riêng bên dưới (có thêm chế độ đọc phụ đề không cần máy chủ).
+
 ## 🤖 Giọng AI tự nhiên
 Khi có máy chủ, app và tiện ích tự đọc bằng giọng AI tiếng Việt của Microsoft (thư viện edge-tts): **HoaiMy** (nữ) và **NamMinh** (nam) — tự nhiên như người thật, không cần cài giọng trên máy, không cần tài khoản. Nhân vật nam (Nam trầm, Nam trẻ, Người già…) dùng NamMinh, nhân vật nữ và trẻ em dùng HoaiMy với cao độ khác nhau. Có thể tắt trong **Cài đặt → Giọng AI tự nhiên** để dùng giọng của máy.
 
@@ -111,5 +132,5 @@ Mở `index.html` bằng trình duyệt, hoặc bật **GitHub Pages** (Settings
 - Cần cài giọng tiếng Việt cho thiết bị:
   - iPhone: Cài đặt → Trợ năng → Nội dung được đọc → Giọng nói → Tiếng Việt
   - Android: Cài đặt → Chuyển văn bản thành giọng nói → tải gói tiếng Việt
-- App không tự nhận dạng lời nói trong video, nên cần có phụ đề gốc.
+- Không có máy chủ thì app không tự nhận dạng lời nói trong video, nên cần có phụ đề gốc.
 - Giọng lồng tiếng phát trực tiếp khi xem, không ghi được thành tệp video mới.

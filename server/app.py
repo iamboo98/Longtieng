@@ -28,6 +28,7 @@ import subprocess
 import time
 
 import edge_tts
+import director as D
 import httpx
 import yt_dlp
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -124,7 +125,7 @@ def safe_name(s: str) -> str:
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN), "groq": bool(GROQ_KEY), "groq_from_app": True, "tts": True}
+    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN), "groq": bool(GROQ_KEY), "groq_from_app": True, "tts": True, "director": True}
 
 
 @app.get("/api/info")
@@ -453,11 +454,16 @@ def live_chunk(req: Request, job: str, start: float = 0, dur: float = 45, lang: 
     try:
         if os.path.exists(part) and os.path.getsize(part) > 1000:
             out = whisper(part, lang)
+            pcm = D.read_pcm(part)
             for s in out.get("segments") or []:
                 t = (s.get("text") or "").strip()
                 if not t or s.get("no_speech_prob", 0) > 0.8:
                     continue
-                segs.append({"start": round(start + s["start"], 2), "end": round(min(start + s["end"], end), 2), "text": t})
+                seg = {"start": round(start + s["start"], 2), "end": round(min(start + s["end"], end), 2), "text": t}
+                f = D.voice_features(pcm, s["start"], s["end"])
+                if f:
+                    seg["f0"], seg["db"] = round(f["f0"]), round(f["db"], 1)
+                segs.append(seg)
             lang_out = out.get("language")
         else:
             lang_out = None
@@ -501,23 +507,68 @@ def parse_json_array(text: str):
     return j
 
 
-def build_prompt(items, prev=None, tone=None, context=None, roles=None) -> str:
+def build_prompt(items, prev=None, tone=None, context=None, roles=None, profile=None) -> str:
+    tone = tone or (profile or {}).get("tone") or "tự nhiên, như lời nói đời thường"
     return (
-        "Bạn là biên dịch viên lồng tiếng chuyên nghiệp. Dịch các câu thoại sau sang tiếng Việt để đọc lồng tiếng.\n"
-        f"- Văn phong: {tone or 'tự nhiên, như lời nói đời thường'}.\n"
+        "Bạn là biên dịch viên lồng tiếng chuyên nghiệp. Dịch các câu thoại sau sang tiếng Việt để đọc lồng tiếng, "
+        "sao cho người Việt nghe thấy tự nhiên như video được làm bằng tiếng Việt.\n"
+        f"- Văn phong: {tone}.\n"
         + (f"- Bối cảnh: {context}\n" if context else "")
-        + "- Xưng hô phù hợp, nhất quán. Giữ nguyên tên riêng.\n"
+        + D.profile_text(profile)
+        + "- Xưng hô phù hợp quan hệ giữa các nhân vật, nhất quán suốt video. Giữ nguyên tên riêng.\n"
+        "- Dịch ý, không dịch word-by-word; dùng thành ngữ, từ đệm, cách nói đúng chất thể loại.\n"
         "- Mỗi câu phải đọc vừa trong \"sec\" giây (~14 ký tự/giây): ngắn gọn, tự nhiên khi nói.\n"
         "- Không thêm chú thích. Giữ đúng số câu và id.\n"
+        f"- \"emo\": cảm xúc khi nói câu đó, chọn một trong: {D.EMO_LIST}.\n"
+        "- \"g\": người nói là nam, nữ, trẻ hay ? (đoán theo nội dung, cách xưng hô; không rõ thì ?).\n"
         + (f"- Gán \"role\" là số nhân vật nói câu đó, chọn trong: {roles}. Không rõ thì 0.\n" if roles else "")
         + (f"Các câu trước (tham khảo): {json.dumps(prev, ensure_ascii=False)}\n" if prev else "")
         + f"Dữ liệu: {json.dumps(items, ensure_ascii=False)}\n\n"
-        + 'Chỉ trả về JSON dạng {"items":[{"id":số,"vi":"bản dịch"' + (',"role":số' if roles else "") + "}]}."
+        + 'Chỉ trả về JSON dạng {"items":[{"id":số,"vi":"bản dịch","emo":"…","g":"…"' + (',"role":số' if roles else "") + "}]}."
     )
 
 
-def translate_items(items, prev=None, tone=None, context=None, roles=None) -> list:
-    prompt = build_prompt(items, prev, tone, context, roles)
+def llm_json(prompt: str, temperature: float = 0.3) -> dict | list:
+    model = llm_model()
+    for attempt in range(3):
+        r = httpx.post(f"{GROQ}/chat/completions", headers={"Authorization": f"Bearer {gkey()}"}, timeout=90, json={
+            "model": model, "temperature": temperature, "response_format": {"type": "json_object"},
+            "messages": [{"role": "user", "content": prompt}],
+        })
+        if r.status_code == 429:
+            time.sleep(min(float(r.headers.get("retry-after", "5")) + 0.5, 20))
+            continue
+        if r.status_code >= 400:
+            raise HTTPException(502, f"Groq báo lỗi ({r.status_code}): {r.text[:200]}")
+        try:
+            t = r.json()["choices"][0]["message"]["content"].strip()
+            t = re.sub(r"^```\w*\n?|```$", "", t).strip()
+            return json.loads(t[t.find("{"):t.rfind("}") + 1])
+        except Exception:
+            continue
+    raise HTTPException(502, "Mô hình không trả lời đúng định dạng.")
+
+
+def ensure_profile(s: dict, new_lines: list[str] | None = None) -> dict | None:
+    """Ghi nhận lời thoại mới vào phiên; đủ dữ liệu thì nhờ mô hình phân tích thể loại / văn phong / xưng hô."""
+    if new_lines:
+        s["lines"].extend(t for t in new_lines if t)
+        del s["lines"][200:]
+    if D.need_profile(s):
+        s["building"] = True
+        try:
+            p = llm_json(D.profile_prompt(s), 0.2)
+            if isinstance(p, dict) and p.get("genre"):
+                s["profile"], s["built_at"] = p, len(s["lines"])
+        except Exception:
+            s["built_at"] = s["built_at"] or len(s["lines"])
+        finally:
+            s["building"] = False
+    return s["profile"]
+
+
+def translate_items(items, prev=None, tone=None, context=None, roles=None, profile=None) -> list:
+    prompt = build_prompt(items, prev, tone, context, roles, profile)
     model = llm_model()
     for attempt in range(4):
         r = httpx.post(f"{GROQ}/chat/completions", headers={"Authorization": f"Bearer {gkey()}"}, timeout=120, json={
@@ -550,9 +601,20 @@ async def translate(req: Request):
 
     def run():
         _cur_key.set(key)
-        return translate_items(items, body.get("prev"), body.get("tone"), body.get("context"), body.get("roles"))
+        s = D.session(body.get("session"), body.get("title"))
+        prof = ensure_profile(s, [str(i.get("text", "")) for i in items])
+        out = translate_items(items, body.get("prev"), body.get("tone"), body.get("context"), body.get("roles"), prof)
+        if body.get("direct"):
+            by_id = {i.get("id"): i for i in items}
+            for o in out:
+                src = by_id.get(o["id"]) or {}
+                seg = {"start": 0, "end": float(src.get("sec") or 0) or 3, "vi": str(o["vi"]), "emo": o.get("emo"), "g": o.get("g")}
+                feat = {"f0": src.get("f0"), "db": src.get("db")} if src.get("f0") else None
+                o["tts"] = D.direct(s, seg, feat, body.get("direct") == "auto")
+        return out, prof
 
-    return {"items": await run_in_threadpool(run)}
+    out, prof = await run_in_threadpool(run)
+    return {"items": out, "profile": prof}
 
 
 # ---------------------------------------------------------------------------
@@ -561,10 +623,11 @@ async def translate(req: Request):
 VOICES = {"vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"}
 
 
-async def synth(text: str, voice: str, pitch: int = 0, rate: int = 0) -> bytes:
+async def synth(text: str, voice: str, pitch: int = 0, rate: int = 0, volume: int = 0) -> bytes:
     if voice not in VOICES:
         voice = "vi-VN-HoaiMyNeural"
-    c = edge_tts.Communicate(text, voice, rate=f"{max(-50, min(100, rate)):+d}%", pitch=f"{max(-50, min(50, pitch)):+d}Hz")
+    c = edge_tts.Communicate(text, voice, rate=f"{max(-50, min(100, int(rate))):+d}%",
+                             pitch=f"{max(-50, min(50, int(pitch))):+d}Hz", volume=f"{max(-80, min(50, int(volume))):+d}%")
     buf = bytearray()
     async for ch in c.stream():
         if ch.get("type") == "audio":
@@ -575,14 +638,14 @@ async def synth(text: str, voice: str, pitch: int = 0, rate: int = 0) -> bytes:
 
 
 @app.get("/api/tts")
-async def tts(req: Request, text: str, voice: str = "vi-VN-HoaiMyNeural", pitch: int = 0, rate: int = 0):
+async def tts(req: Request, text: str, voice: str = "vi-VN-HoaiMyNeural", pitch: int = 0, rate: int = 0, volume: int = 0):
     auth(req)
     text = (text or "").strip()[:1000]
     if not text:
         raise HTTPException(400, "Thiếu nội dung cần đọc.")
     for attempt in range(3):
         try:
-            audio = await synth(text, voice, pitch, rate)
+            audio = await synth(text, voice, pitch, rate, volume)
             return Response(audio, media_type="audio/mpeg", headers={"Cache-Control": "public, max-age=86400"})
         except HTTPException:
             raise
@@ -596,53 +659,101 @@ HALLU = re.compile(r"(subscribe|đăng ký kênh|cảm ơn các bạn đã (xem|
                    r"ご視聴ありがとう|字幕|amara\.org|點贊|订阅)", re.I)
 
 
+def interpret_core(path: str, lang=None, prev=None, tone=None, context=None, voice=None, pitch=0,
+                   sid=None, title=None) -> dict:
+    """Nghe + dịch + chỉ đạo giọng cho một đoạn âm thanh ngắn (vài giây)."""
+    out = whisper(path, lang or None)
+    language = out.get("language")
+    segs = []
+    for s in out.get("segments") or []:
+        t = (s.get("text") or "").strip()
+        if not t or s.get("no_speech_prob", 0) > 0.6 or s.get("avg_logprob", 0) < -1.2 or HALLU.search(t):
+            continue
+        segs.append({"start": round(s["start"], 2), "end": round(s["end"], 2), "src": t})
+    if not segs:
+        return {"language": language, "items": []}
+    sess = D.session(sid, title)
+    pcm = D.read_pcm(path)
+    feats = [D.voice_features(pcm, x["start"], x["end"]) for x in segs]
+    is_vi = (lang or "").startswith("vi") or str(language).lower() in ("vi", "vietnamese")
+    prof = ensure_profile(sess, [x["src"] for x in segs])
+    if is_vi:
+        for x in segs:
+            x["vi"] = x["src"]
+    else:
+        try:
+            prev_list = json.loads(prev) if isinstance(prev, str) and prev else prev
+        except ValueError:
+            prev_list = None
+        items = [{"id": i, "sec": round(x["end"] - x["start"], 1), "text": x["src"]} for i, x in enumerate(segs)]
+        for o in translate_items(items, prev_list, tone, context, None, prof):
+            if 0 <= int(o["id"]) < len(segs):
+                x = segs[int(o["id"])]
+                x["vi"] = str(o["vi"]).strip()
+                x["emo"], x["g"] = o.get("emo"), o.get("g")
+        for x in segs:
+            x.setdefault("vi", x["src"])
+    auto = voice == "auto"
+    for x, f in zip(segs, feats):
+        x["tts"] = D.direct(sess, x, f, auto)
+        x.pop("g", None)
+        if not auto and voice:
+            x["tts"].update(voice=voice, pitch=int(pitch or 0) + x["tts"]["pitch"])
+    if voice:
+        async def all_audio():
+            return await asyncio.gather(*[synth(x["vi"], x["tts"]["voice"], x["tts"]["pitch"], x["tts"]["rate"], x["tts"]["volume"])
+                                          for x in segs], return_exceptions=True)
+        for x, a in zip(segs, asyncio.run(all_audio())):
+            if isinstance(a, bytes):
+                x["audio"] = base64.b64encode(a).decode()
+    return {"language": language, "items": segs, "profile": prof}
+
+
 @app.post("/api/interpret")
 def interpret(req: Request, file: UploadFile = File(...), lang: str | None = Form(None), prev: str | None = Form(None),
               tone: str | None = Form(None), context: str | None = Form(None),
-              voice: str | None = Form(None), pitch: int = Form(0)):
-    """Phiên dịch tức thời: nhận một đoạn âm thanh ngắn (vài giây), trả về lời gốc + bản dịch."""
+              voice: str | None = Form(None), pitch: int = Form(0),
+              session: str | None = Form(None), title: str | None = Form(None)):
+    """Phiên dịch tức thời: nhận một đoạn âm thanh ngắn (vài giây), trả về lời gốc + bản dịch + giọng đọc."""
     auth(req)
     need_groq(req)
     tmp = tempfile.mkdtemp(prefix="itp_")
     try:
         path = os.path.join(tmp, "clip" + (os.path.splitext(file.filename or "")[1] or ".wav"))
-        data = file.file.read(30 * 1024 * 1024)
         with open(path, "wb") as f:
-            f.write(data)
-        out = whisper(path, lang or None)
-        language = out.get("language")
-        segs = []
-        for s in out.get("segments") or []:
-            t = (s.get("text") or "").strip()
-            if not t or s.get("no_speech_prob", 0) > 0.6 or s.get("avg_logprob", 0) < -1.2 or HALLU.search(t):
-                continue
-            segs.append({"start": round(s["start"], 2), "end": round(s["end"], 2), "src": t})
-        if not segs:
-            return {"language": language, "items": []}
-        is_vi = (lang or "").startswith("vi") or str(language).lower() in ("vi", "vietnamese")
-        if is_vi:
-            for s in segs:
-                s["vi"] = s["src"]
-        else:
-            try:
-                prev_list = json.loads(prev) if prev else None
-            except ValueError:
-                prev_list = None
-            items = [{"id": i, "sec": round(s["end"] - s["start"], 1), "text": s["src"]} for i, s in enumerate(segs)]
-            for o in translate_items(items, prev_list, tone, context):
-                if 0 <= int(o["id"]) < len(segs):
-                    segs[int(o["id"])]["vi"] = str(o["vi"]).strip()
-            for s in segs:
-                s.setdefault("vi", s["src"])
-        if voice:
-            async def all_audio():
-                return await asyncio.gather(*[synth(s["vi"], voice, pitch) for s in segs], return_exceptions=True)
-            for s, a in zip(segs, asyncio.run(all_audio())):
-                if isinstance(a, bytes):
-                    s["audio"] = base64.b64encode(a).decode()
-        return {"language": language, "items": segs}
+            f.write(file.file.read(30 * 1024 * 1024))
+        return interpret_core(path, lang, prev, tone, context, voice, pitch, session, title)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+@app.post("/api/interpret.json")
+async def interpret_json(req: Request):
+    """Như /api/interpret nhưng nhận JSON {audio: base64 wav, ...} — dùng cho tiện ích chạy trên mọi trang web."""
+    auth(req)
+    need_groq(req)
+    b = await req.json()
+    try:
+        data = base64.b64decode(b.get("audio") or "", validate=False)[:30 * 1024 * 1024]
+    except Exception:
+        raise HTTPException(400, "Âm thanh không hợp lệ.")
+    if len(data) < 1000:
+        return {"items": []}
+    key = gkey()
+
+    def run():
+        _cur_key.set(key)
+        tmp = tempfile.mkdtemp(prefix="itj_")
+        try:
+            path = os.path.join(tmp, "clip.wav")
+            with open(path, "wb") as f:
+                f.write(data)
+            return interpret_core(path, b.get("lang"), b.get("prev"), b.get("tone"), b.get("context"),
+                                  b.get("voice"), int(b.get("pitch") or 0), b.get("session"), b.get("title"))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    return await run_in_threadpool(run)
 
 
 @app.exception_handler(HTTPException)
