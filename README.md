@@ -53,6 +53,24 @@ Khi dùng máy chủ, mỗi video được "đạo diễn" tự động để gi
 
 Bật / tắt: **Cài đặt → 🎭 Đạo diễn tự động** (app web), hoặc ô 🎭 trong bảng tiện ích. Chỉ áp dụng cho nhân vật để giọng **Tự động**; muốn tự chọn giọng thì chọn giọng cụ thể cho nhân vật. **Văn phong → 🎯 Tự động theo thể loại video** là mặc định; chọn văn phong khác để ghi đè.
 
+## 📱 App xem phim lồng tiếng trên điện thoại (phim.html)
+Trang [`phim.html`](phim.html) là app xem phim cho điện thoại: chọn phim trong máy, app tự nghe lời thoại, dịch sang tiếng Việt và đọc giọng Việt đúng lúc nhân vật nói, kèm phụ đề.
+
+- **Cài như app thật**: mở `https://iamboo98.github.io/Longtieng/phim.html`
+  - Android (Chrome): bấm **📲 Cài app lên màn hình chính** (hoặc ⋮ → *Cài đặt ứng dụng*).
+  - iPhone (Safari): **Chia sẻ → Thêm vào MH chính**. App mở toàn màn hình, xoay ngang để xem.
+- **🎯 Dịch trước (MP4/MOV)**: app tự cắt tiếng phim ngay trên điện thoại thành từng đoạn 30–60 giây (chỉ ~0,5–3 MB mỗi đoạn, không tải cả phim lên), gửi máy chủ nghe + dịch + chọn giọng, luôn đi trước chỗ đang xem khoảng 100 giây. Giọng Việt đọc đúng thời điểm, phim dài bao nhiêu cũng được. Lần đầu bấm ▶ chờ khoảng 10–20 giây; tua tới đoạn chưa dịch thì phim tạm dừng vài giây (tắt được trong Cài đặt).
+- **⚡ Tức thời**: với MKV / WebM hoặc âm thanh không phải AAC, app nghe tiếng đang phát và lồng tiếng sau 3–5 giây.
+- **Phụ đề gốc .srt / .vtt**: thêm phụ đề trước khi chọn phim → dịch theo phụ đề (chuẩn nhất, không cần nghe). Phụ đề tiếng Việt sẵn thì chỉ đọc.
+- **Đạo diễn tự động**: nam giọng NamMinh, nữ giọng HoaiMy, trẻ em giọng cao, mỗi nhân vật một giọng riêng, theo cảm xúc từng câu; chọn **thể loại phim** (hành động, tình cảm, cổ trang/kiếm hiệp, hài, kinh dị, hoạt hình…) để xưng hô đúng chất.
+- **Tiếng gốc tự nhỏ đi khi có thoại**, chỉnh riêng âm lượng giọng Việt, tốc độ đọc, cỡ chữ phụ đề.
+- **Lưu bản dịch từng phim** trong máy: xem lại không phải dịch lại, tự xem tiếp từ chỗ dừng. Xuất phụ đề Việt `.srt`.
+- Chạm 2 lần mép trái/phải để tua 10 giây; giữ màn hình sáng khi xem.
+
+Cần máy chủ đã cập nhật bản mới nhất (có `/api/film/chunk`) — trên Render bấm **Manual Deploy → Deploy latest commit**. Máy chủ cũ vẫn dùng được chế độ ⚡ Tức thời. Địa chỉ máy chủ và mã dùng chung với app chính.
+
+Lưu ý: phim phải phát được trên điện thoại (iPhone không phát MKV); phim có DRM (Netflix…) không dùng được; app cần mở và màn hình sáng khi xem.
+
 ## 🎮 Lồng tiếng Game trực tiếp (game.html)
 Trang [`game.html`](game.html) nghe tiếng game đang chạy trên máy tính (ví dụ thoại tiếng Anh trong GTA), dịch đúng chất thể loại game và đọc giọng Việt ngay khi chơi, trễ khoảng 2–4 giây. Dùng được cả khi stream.
 

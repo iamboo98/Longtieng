@@ -125,7 +125,7 @@ def safe_name(s: str) -> str:
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN), "groq": bool(GROQ_KEY), "groq_from_app": True, "tts": True, "director": True}
+    return {"ok": True, "yt_dlp": yt_dlp.version.__version__, "token": bool(TOKEN), "groq": bool(GROQ_KEY), "groq_from_app": True, "tts": True, "director": True, "film": True}
 
 
 @app.get("/api/info")
@@ -660,7 +660,7 @@ HALLU = re.compile(r"(subscribe|đăng ký kênh|cảm ơn các bạn đã (xem|
 
 
 def interpret_core(path: str, lang=None, prev=None, tone=None, context=None, voice=None, pitch=0,
-                   sid=None, title=None) -> dict:
+                   sid=None, title=None, synth_audio: bool = True) -> dict:
     """Nghe + dịch + chỉ đạo giọng cho một đoạn âm thanh ngắn (vài giây)."""
     out = whisper(path, lang or None)
     language = out.get("language")
@@ -699,7 +699,7 @@ def interpret_core(path: str, lang=None, prev=None, tone=None, context=None, voi
         x.pop("g", None)
         if not auto and voice:
             x["tts"].update(voice=voice, pitch=int(pitch or 0) + x["tts"]["pitch"])
-    if voice:
+    if voice and synth_audio:
         async def all_audio():
             return await asyncio.gather(*[synth(x["vi"], x["tts"]["voice"], x["tts"]["pitch"], x["tts"]["rate"], x["tts"]["volume"])
                                           for x in segs], return_exceptions=True)
@@ -754,6 +754,34 @@ async def interpret_json(req: Request):
             shutil.rmtree(tmp, ignore_errors=True)
 
     return await run_in_threadpool(run)
+
+
+@app.post("/api/film/chunk")
+def film_chunk(req: Request, file: UploadFile = File(...), offset: float = Form(0), lang: str | None = Form(None),
+               prev: str | None = Form(None), tone: str | None = Form(None), context: str | None = Form(None),
+               session: str | None = Form(None), title: str | None = Form(None)):
+    """App xem phim: nhận một đoạn âm thanh (30–90 giây, app tự cắt từ tệp phim trên điện thoại),
+    trả về lời gốc + bản dịch + chỉ đạo giọng (chưa kèm tiếng; app tự lấy qua /api/tts ngay trước khi đọc)."""
+    auth(req)
+    need_groq(req)
+    tmp = tempfile.mkdtemp(prefix="flm_")
+    try:
+        src = os.path.join(tmp, "in" + (os.path.splitext(file.filename or "")[1] or ".aac"))
+        with open(src, "wb") as f:
+            f.write(file.file.read(40 * 1024 * 1024))
+        wav = os.path.join(tmp, "clip.wav")
+        r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "16000", wav],
+                           capture_output=True, timeout=120)
+        if r.returncode != 0 or not os.path.exists(wav) or os.path.getsize(wav) < 2000:
+            return {"items": [], "offset": offset}
+        out = interpret_core(wav, lang, prev, tone, context, "auto", 0, session, title, synth_audio=False)
+        for x in out.get("items") or []:
+            x["start"] = round(x["start"] + offset, 2)
+            x["end"] = round(x["end"] + offset, 2)
+        out["offset"] = offset
+        return out
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 @app.exception_handler(HTTPException)

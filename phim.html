@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phim Việt</title>
+<meta name="description" content="Xem phim trên điện thoại, tự dịch và lồng tiếng Việt theo lời thoại.">
+<meta name="theme-color" content="#0b0c10">
+<link rel="manifest" href="phim.webmanifest">
+<link rel="icon" href="icons/phim.svg">
+<link rel="apple-touch-icon" href="icons/phim-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Phim Việt">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0c10;--p:#15171d;--p2:#1d2028;--ln:#2a2e38;--tx:#eef0f4;--mu:#8f98a8;--ac:#f5a524;--ac2:#ffd27a;--ok:#3ecf8e;--er:#ff6b6b;
+  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);--subsize:22px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 "Be Vietnam Pro",system-ui,-apple-system,sans-serif;overflow-x:hidden;overscroll-behavior:none}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+.hide{display:none!important}
+
+/* ===== Trang chủ ===== */
+.home{max-width:620px;margin:0 auto;padding:calc(14px + var(--sat)) calc(16px + var(--sar)) calc(28px + var(--sab)) calc(16px + var(--sal));display:flex;flex-direction:column;gap:14px}
+.top{display:flex;align-items:center;gap:10px}
+.top img{width:38px;height:38px;border-radius:10px}
+.top h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.2px}
+.top h1 small{display:block;font-size:12px;font-weight:500;color:var(--mu);letter-spacing:0}
+.icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--p2);font-size:19px;margin-left:auto}
+.pick{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;min-height:180px;padding:22px;border-radius:20px;
+  background:radial-gradient(120% 120% at 20% 0%,#3a2410 0%,#1a1410 45%,#121318 100%);border:1px solid #3b2b17;overflow:hidden}
+.pick b{font-size:19px}.pick span{color:#d9c7ad;font-size:13px;max-width:360px}
+.pick .big{width:64px;height:64px;border-radius:50%;background:var(--ac);color:#1a1000;display:grid;place-items:center;font-size:26px;box-shadow:0 8px 30px rgba(245,165,36,.35);margin-bottom:6px}
+.pick input,.subpick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.row{display:flex;gap:10px;align-items:center}
+.subpick{position:relative;flex:1;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:var(--p);border:1px dashed var(--ln);font-size:13.5px;color:var(--mu);min-width:0}
+.subpick b{color:var(--tx);font-weight:600}
+.subpick .x{position:relative;z-index:2;margin-left:auto;color:var(--mu);padding:2px 6px}
+.card{background:var(--p);border:1px solid var(--ln);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.card h2{margin:0;font-size:14px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.6px}
+.note{font-size:13px;line-height:1.5;color:var(--mu)}.note b{color:var(--tx)}
+.note.warn{color:#ffd9a0;background:#2b1f0e;border:1px solid #4a3417;border-radius:12px;padding:10px 12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 14px;border-radius:12px;background:var(--p2);border:1px solid var(--ln);font-weight:600;font-size:14px}
+.btn.pr{background:var(--ac);border-color:var(--ac);color:#1a1000;font-weight:800}
+.btn.sm{padding:7px 10px;font-size:13px;border-radius:10px}
+.films{display:flex;flex-direction:column;gap:8px}
+.film{display:flex;gap:12px;align-items:center;padding:10px;border-radius:14px;background:var(--p2);position:relative}
+.film .th{width:46px;height:46px;border-radius:10px;background:#2b2216;display:grid;place-items:center;font-size:20px;flex:none}
+.film .in{min-width:0;flex:1}.film .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.film .mt{font-size:12px;color:var(--mu)}
+.film .bar{height:4px;border-radius:2px;background:#333845;margin-top:6px;overflow:hidden;position:relative}
+.film .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ac)}
+.film input{position:absolute;inset:0;opacity:0;width:100%}
+.film .del{position:relative;z-index:2;color:var(--mu);padding:8px;font-size:16px}
+.how{margin:0;padding-left:20px;font-size:13px;color:var(--mu);line-height:1.6}.how b{color:var(--tx)}
+
+/* ===== Trình phát ===== */
+.player{position:fixed;inset:0;background:#000;z-index:10;overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.player video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+.sub{position:absolute;left:calc(5% + var(--sal));right:calc(5% + var(--sar));bottom:calc(7% + var(--sab));text-align:center;pointer-events:none;transition:bottom .25s;z-index:3}
+.player.ui .sub{bottom:calc(96px + var(--sab))}
+.sub .vi{display:inline;font-weight:700;font-size:var(--subsize);line-height:1.42;color:#fff;background:rgba(0,0,0,.55);padding:2px 10px;border-radius:7px;-webkit-box-decoration-break:clone;box-decoration-break:clone;text-shadow:0 1px 2px #000}
+.sub .src{display:block;margin-top:5px}.sub .src span{font-size:calc(var(--subsize)*.66);color:#dfe3ea;background:rgba(0,0,0,.5);padding:1px 8px;border-radius:6px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.ui-layer{position:absolute;inset:0;z-index:4;opacity:0;transition:opacity .2s;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.65) 0,rgba(0,0,0,0) 22%,rgba(0,0,0,0) 62%,rgba(0,0,0,.75) 100%)}
+.player.ui .ui-layer{opacity:1}
+.player.ui .ptop,.player.ui .pbot,.player.ui .mid .pb{pointer-events:auto}
+.ptop{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:8px;padding:calc(8px + var(--sat)) calc(10px + var(--sar)) 8px calc(10px + var(--sal))}
+.ptop .ttl{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14.5px}
+.pb{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:20px;color:#fff;background:rgba(255,255,255,.08);flex:none}
+.pb.on{background:var(--ac);color:#1a1000}
+.mid{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;gap:34px;align-items:center}
+.mid .pb{width:56px;height:56px;font-size:20px;background:rgba(0,0,0,.35)}
+.mid .play{width:78px;height:78px;font-size:32px;background:rgba(245,165,36,.92);color:#1a1000}
+.pbot{position:absolute;left:0;right:0;bottom:0;padding:0 calc(12px + var(--sar)) calc(8px + var(--sab)) calc(12px + var(--sal))}
+.seek{position:relative;height:28px;display:flex;align-items:center}
+.seek .rail{position:absolute;left:0;right:0;height:4px;border-radius:2px;background:rgba(255,255,255,.22);overflow:hidden}
+.seek .cov{position:absolute;inset:0}
+.seek .done{position:absolute;left:0;top:0;bottom:0;background:var(--ac)}
+.seek input{position:relative;width:100%;margin:0;background:transparent;-webkit-appearance:none;appearance:none;height:28px}
+.seek input::-webkit-slider-runnable-track{height:4px;background:transparent}
+.seek input::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;margin-top:-6px;box-shadow:0 0 0 4px rgba(245,165,36,.35)}
+.seek input::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:0}
+.prow{display:flex;align-items:center;gap:8px}
+.prow .tm{font-size:12.5px;font-variant-numeric:tabular-nums;color:#e6e8ec;margin-right:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:99px;background:rgba(255,255,255,.1);color:#fff;font-size:13px;font-weight:600}
+.chip.on{background:var(--ac);color:#1a1000}
+.badge{position:absolute;left:calc(10px + var(--sal));top:calc(60px + var(--sat));z-index:5;font-size:12px;color:#e8eaee;background:rgba(0,0,0,.55);padding:4px 10px;border-radius:99px;display:flex;gap:6px;align-items:center;pointer-events:none;transition:opacity .3s}
+.badge .dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.badge.er .dot{background:var(--er)}
+.player:not(.ui) .badge{opacity:0}
+.speaking{position:absolute;right:calc(12px + var(--sar));top:calc(12px + var(--sat));z-index:5;font-size:12px;color:#1a1000;background:var(--ac);padding:3px 9px;border-radius:99px;font-weight:700;pointer-events:none}
+.player.ui .speaking{top:calc(62px + var(--sat))}
+.wait{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(0,0,0,.6);text-align:center;padding:24px}
+.wait .spin{width:42px;height:42px;border-radius:50%;border:4px solid rgba(255,255,255,.2);border-top-color:var(--ac);animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.wait p{margin:0;max-width:360px;font-size:14px;color:#e6e8ec}
+.toast{position:absolute;left:50%;top:calc(16px + var(--sat));transform:translateX(-50%);z-index:8;background:rgba(20,22,28,.95);border:1px solid var(--ln);padding:9px 14px;border-radius:12px;font-size:13.5px;display:flex;gap:10px;align-items:center;max-width:92%;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.toast button{color:var(--ac);font-weight:700}
+.tap{position:absolute;top:0;bottom:0;width:33%;z-index:2}
+.tap.l{left:0}.tap.r{right:0}.tap.c{left:33%;right:33%;width:auto}
+.ripple{position:absolute;top:50%;transform:translateY(-50%);z-index:5;background:rgba(255,255,255,.14);border-radius:50%;width:120px;height:120px;display:grid;place-items:center;font-weight:700;font-size:14px;pointer-events:none;animation:fd .6s forwards}
+@keyframes fd{from{opacity:1}to{opacity:0}}
+
+/* ===== Bảng cài đặt ===== */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;max-height:88vh;max-height:88dvh;overflow:auto;background:var(--p);border-radius:20px 20px 0 0;border-top:1px solid var(--ln);
+  padding:8px calc(16px + var(--sar)) calc(20px + var(--sab)) calc(16px + var(--sal));max-width:640px;margin:0 auto;-webkit-overflow-scrolling:touch}
+@media (orientation:landscape) and (max-height:500px){.sheet{left:auto;right:0;top:0;max-height:none;width:min(420px,70vw);border-radius:20px 0 0 20px;border-top:0;border-left:1px solid var(--ln);padding-top:calc(10px + var(--sat))}}
+.grab{width:42px;height:5px;border-radius:3px;background:#3a3f4b;margin:4px auto 10px}
+.sheet h3{margin:16px 0 8px;font-size:12.5px;color:var(--mu);text-transform:uppercase;letter-spacing:.6px}
+.sheet h3:first-of-type{margin-top:4px}
+.f{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;font-size:13px;color:var(--mu)}
+.f>span{display:flex;justify-content:space-between}.f>span b{color:var(--tx);font-weight:600}
+.sheet select,.sheet input[type=text],.sheet input[type=password],.sheet input[type=url],.sheet textarea{width:100%;background:var(--p2);border:1px solid var(--ln);border-radius:11px;padding:10px;font-size:14.5px;color:var(--tx)}
+.sheet textarea{min-height:60px;resize:vertical}
+.sheet input[type=range]{width:100%;accent-color:var(--ac)}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;font-size:14px}
+.sw input{width:46px;height:26px;-webkit-appearance:none;appearance:none;background:#3a3f4b;border-radius:99px;position:relative;flex:none;transition:background .2s}
+.sw input::after{content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .2s}
+.sw input:checked{background:var(--ac)}.sw input:checked::after{left:23px}
+.seg{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
+.st{font-size:12.5px;color:var(--mu)}.st.ok{color:var(--ok)}.st.er{color:var(--er)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<!-- ============ TRANG CHỦ ============ -->
+<main class="home" id="home">
+  <div class="top">
+    <img src="icons/phim-192.png" alt="">
+    <h1>Phim Việt<small>Xem phim · tự dịch · lồng tiếng Việt</small></h1>
+    <button class="icon" id="openSet" aria-label="Cài đặt">⚙️</button>
+  </div>
+
+  <label class="pick">
+    <div class="big">▶</div>
+    <b>Chọn phim trên điện thoại</b>
+    <span>MP4 / MOV phát và dịch trước khớp nhất. Phim nói tiếng Anh, Trung, Hàn, Nhật, Thái… đều được lồng tiếng Việt.</span>
+    <input type="file" id="fFilm" accept="video/*,.mkv,.mp4,.mov,.m4v,.webm">
+  </label>
+
+  <div class="row">
+    <label class="subpick" id="subBox">📝 <span id="subLbl">Có phụ đề gốc (.srt)? <b>Thêm vào</b> — dịch chuẩn hơn</span>
+      <input type="file" id="fSub" accept=".srt,.vtt,.txt,text/plain">
+      <button class="x hide" id="subClr" aria-label="Bỏ phụ đề">✕</button>
+    </label>
+  </div>
+
+  <div class="note warn hide" id="srvWarn"></div>
+  <button class="btn pr hide" id="installBtn">📲 Cài app lên màn hình chính</button>
+  <div class="note hide" id="iosHint">📲 <b>Cài như app:</b> mở trang này bằng Safari → chạm <b>Chia sẻ</b> <span aria-hidden="true">⬆︎</span> → <b>Thêm vào MH chính</b>. App mở toàn màn hình, xem phim xoay ngang thoải mái.</div>
+
+  <section class="card" id="libCard">
+    <h2>Phim đã xem</h2>
+    <div class="films" id="films"><div class="note">Chưa có phim nào. Bản dịch của mỗi phim được lưu lại — xem lại không phải chờ dịch.</div></div>
+  </section>
+
+  <section class="card">
+    <h2>Cách dùng</h2>
+    <ol class="how">
+      <li>Lần đầu: <b>⚙️ Cài đặt → Máy chủ</b>, dán địa chỉ máy chủ và <b>Mã Groq</b> (miễn phí).</li>
+      <li>Chọn phim. App tự cắt tiếng phim thành từng đoạn ngắn, gửi lên máy chủ để <b>nghe – dịch – chọn giọng</b>, luôn đi trước chỗ bạn xem khoảng 1–2 phút.</li>
+      <li>Bấm ▶. Giọng Việt đọc đúng lúc nhân vật nói: nam giọng nam, nữ giọng nữ, mỗi nhân vật một giọng, theo cảm xúc từng câu. Tiếng gốc tự nhỏ đi khi có thoại.</li>
+      <li>Chạm 2 lần mép trái/phải để tua 10 giây. Nút <b>🎙</b> bật/tắt lồng tiếng, <b>CC</b> bật/tắt phụ đề.</li>
+    </ol>
+  </section>
+</main>
+
+<!-- ============ TRÌNH PHÁT ============ -->
+<div class="player hide" id="player">
+  <video id="v" playsinline webkit-playsinline preload="auto"></video>
+  <div class="tap l" data-z="l"></div><div class="tap c" data-z="c"></div><div class="tap r" data-z="r"></div>
+  <div class="sub" id="sub"></div>
+  <div class="speaking hide" id="spk">🎙 Lồng tiếng</div>
+  <div class="badge" id="badge"><span class="dot"></span><span id="badgeTx">—</span></div>
+  <div class="ui-layer" id="ui">
+    <div class="ptop">
+      <button class="pb" id="back" aria-label="Quay lại">←</button>
+      <div class="ttl" id="ttl"></div>
+      <button class="pb" id="pSet" aria-label="Cài đặt">⚙️</button>
+    </div>
+    <div class="mid">
+      <button class="pb" id="rw" aria-label="Lùi 10 giây">↺10</button>
+      <button class="pb play" id="pp" aria-label="Phát">▶</button>
+      <button class="pb" id="ff" aria-label="Tới 10 giây">10↻</button>
+    </div>
+    <div class="pbot">
+      <div class="seek"><div class="rail"><div class="cov" id="cov"></div><div class="done" id="done"></div></div><input type="range" id="seek" min="0" max="1000" value="0" aria-label="Tua"></div>
+      <div class="prow">
+        <span class="tm" id="tm">0:00 / 0:00</span>
+        <button class="chip on" id="dubBtn">🎙 Lồng tiếng</button>
+        <button class="chip on" id="ccBtn">CC</button>
+        <button class="pb" id="fsBtn" aria-label="Toàn màn hình">⛶</button>
+      </div>
+    </div>
+  </div>
+  <div class="wait hide" id="wait"><div class="spin"></div><p id="waitTx">Đang dịch…</p><button class="btn sm" id="noDub">Xem không lồng tiếng</button></div>
+</div>
+
+<!-- ============ CÀI ĐẶT ============ -->
+<div class="sheet-bg hide" id="sheetBg"></div>
+<div class="sheet hide" id="sheet" role="dialog" aria-label="Cài đặt">
+  <div class="grab"></div>
+
+  <h3>Lồng tiếng</h3>
+  <label class="f">Giọng đọc
+    <select id="sVoice">
+      <option value="auto">🎭 Tự động theo nhân vật (nam/nữ/trẻ em, cảm xúc)</option>
+      <option value="vi-VN-NamMinhNeural">NamMinh — một giọng nam</option>
+      <option value="vi-VN-HoaiMyNeural">HoaiMy — một giọng nữ</option>
+      <option value="device">Giọng có sẵn trên điện thoại</option>
+      <option value="off">Tắt giọng — chỉ phụ đề tiếng Việt</option>
+    </select>
+  </label>
+  <label class="f"><span>Âm lượng giọng Việt <b id="vVoiceVol"></b></span><input type="range" id="sVoiceVol" min="0" max="100"></label>
+  <label class="f"><span>Tiếng phim gốc khi đang lồng <b id="vDuck"></b></span><input type="range" id="sDuck" min="0" max="100"></label>
+  <label class="f"><span>Tiếng phim gốc lúc không thoại <b id="vOrig"></b></span><input type="range" id="sOrig" min="0" max="100"></label>
+  <label class="f"><span>Tốc độ đọc <b id="vRate"></b></span><input type="range" id="sRate" min="0.9" max="1.4" step="0.05"></label>
+  <label class="sw">Chờ lồng tiếng khi dịch chưa kịp (tạm dừng vài giây)<input type="checkbox" id="sHold"></label>
+
+  <h3>Dịch</h3>
+  <label class="f">Cách dịch
+    <select id="sMode">
+      <option value="auto">Tự động (dịch trước nếu được, không thì tức thời)</option>
+      <option value="pre">🎯 Dịch trước — khớp miệng, đúng lúc (MP4/MOV)</option>
+      <option value="live">⚡ Tức thời — nghe tiếng đang phát, trễ 3–5 giây (mọi định dạng)</option>
+    </select>
+  </label>
+  <label class="f">Ngôn ngữ trong phim
+    <select id="sLang">
+      <option value="">Tự nhận</option><option value="en">Tiếng Anh</option><option value="zh">Tiếng Trung</option><option value="ko">Tiếng Hàn</option>
+      <option value="ja">Tiếng Nhật</option><option value="th">Tiếng Thái</option><option value="fr">Tiếng Pháp</option><option value="es">Tiếng Tây Ban Nha</option>
+      <option value="hi">Tiếng Hindi</option><option value="ru">Tiếng Nga</option><option value="de">Tiếng Đức</option><option value="id">Tiếng Indonesia</option>
+    </select>
+  </label>
+  <label class="f">Thể loại phim (quyết định văn phong, xưng hô)
+    <select id="sTone">
+      <option value="">🎯 Tự nhận theo nội dung phim</option>
+      <option value="phim hành động, gay cấn, câu ngắn dứt khoát; đối đầu thì xưng mày – tao">Hành động / hình sự</option>
+      <option value="phim tình cảm, tâm lý, lời lẽ nhẹ nhàng giàu cảm xúc; người yêu xưng anh – em">Tình cảm / tâm lý</option>
+      <option value="phim cổ trang, kiếm hiệp, cung đấu: dùng từ Hán Việt, xưng ta – ngươi, huynh – muội, bệ hạ, thần, nô tỳ">Cổ trang / kiếm hiệp</option>
+      <option value="phim hài, dí dỏm, dùng cách nói đời thường và chơi chữ kiểu Việt">Hài</option>
+      <option value="phim kinh dị, giật gân, lời thoại căng thẳng, run sợ">Kinh dị</option>
+      <option value="phim hoạt hình, vui tươi, dễ hiểu cho cả trẻ em">Hoạt hình</option>
+      <option value="phim khoa học viễn tưởng, giữ thuật ngữ khoa học chính xác, mạch lạc">Khoa học viễn tưởng</option>
+      <option value="phim tài liệu, thuyết minh rõ ràng, trang trọng">Tài liệu / thuyết minh</option>
+    </select>
+  </label>
+  <label class="f">Bối cảnh / tên nhân vật (tuỳ chọn, giúp dịch đúng)
+    <textarea id="sCtx" placeholder="VD: Tiêu Viêm là nam chính, Huân Nhi là sư muội của cậu…"></textarea>
+  </label>
+
+  <h3>Phụ đề</h3>
+  <label class="sw">Phụ đề tiếng Việt<input type="checkbox" id="sSub"></label>
+  <label class="sw">Kèm lời gốc bên dưới<input type="checkbox" id="sSrc"></label>
+  <label class="f"><span>Cỡ chữ <b id="vSize"></b></span><input type="range" id="sSize" min="14" max="40"></label>
+
+  <div id="filmTools" class="hide">
+    <h3>Phim đang xem</h3>
+    <div class="actions">
+      <button class="btn sm" id="expSrt">💾 Lưu phụ đề Việt (.srt)</button>
+      <button class="btn sm" id="redo">🔄 Dịch lại từ đầu</button>
+    </div>
+  </div>
+
+  <h3>Máy chủ</h3>
+  <label class="f">Địa chỉ máy chủ
+    <input type="url" id="srv" placeholder="https://longtieng-downloader.onrender.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </label>
+  <label class="f">Mã truy cập (API_TOKEN, nếu có)
+    <input type="password" id="srvKey" autocomplete="off">
+  </label>
+  <label class="f">Mã Groq (miễn phí tại console.groq.com → API Keys)
+    <input type="password" id="srvGroq" autocomplete="off" placeholder="gsk_…">
+  </label>
+  <div class="actions"><button class="btn sm" id="srvTest">Kiểm tra kết nối</button><span class="st" id="srvSt"></span></div>
+  <p class="note">Địa chỉ và mã dùng chung với app Lồng tiếng video trên cùng trang. <a href="./" style="color:var(--ac)">Mở app Lồng tiếng video ↗</a></p>
+  <div style="height:8px"></div>
+  <button class="btn pr" id="closeSet" style="width:100%">Xong</button>
+</div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const fmt=s=>{s=Math.max(0,Math.floor(s||0));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
+const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const standalone=matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches||navigator.standalone;
+
+/* ================= Cài đặt ================= */
+const DEF={voice:'auto',voiceVol:100,duck:20,orig:100,rate:1,hold:true,mode:'auto',lang:'',tone:'',ctx:'',sub:true,src:false,size:22,dub:true};
+const S=Object.assign({},DEF,LS.get('phim_cfg',{}));
+const saveS=()=>LS.set('phim_cfg',S);
+const srv={get base(){return ($('srv').value||'').trim().replace(/\/+$/,'').replace(/^(?!https?:\/\/)/,'https://')},get has(){return !!$('srv').value.trim()},
+  head(){const h={},k=$('srvKey').value.trim(),g=$('srvGroq').value.trim();if(k)h['X-Api-Key']=k;if(g)h['X-Groq-Key']=g;return h}};
+let health=null; // kết quả /api/health
+async function srvErr(r){try{const j=await r.json();return j.detail||('Lỗi '+r.status)}catch(e){return 'Lỗi máy chủ '+r.status}}
+
+function bindSettings(){
+  const sel=[['sVoice','voice'],['sMode','mode'],['sLang','lang'],['sTone','tone']];
+  for(const [id,k] of sel){$(id).value=S[k];$(id).onchange=()=>{const old=S[k];S[k]=$(id).value;saveS();onSetting(k,old)}}
+  const rng=[['sVoiceVol','voiceVol','vVoiceVol',v=>v+'%'],['sDuck','duck','vDuck',v=>v+'%'],['sOrig','orig','vOrig',v=>v+'%'],['sRate','rate','vRate',v=>(+v).toFixed(2)+'×'],['sSize','size','vSize',v=>v+'px']];
+  for(const [id,k,lb,f] of rng){$(id).value=S[k];$(lb).textContent=f(S[k]);$(id).oninput=()=>{S[k]=+$(id).value;$(lb).textContent=f(S[k]);saveS();onSetting(k)}}
+  for(const [id,k] of [['sHold','hold'],['sSub','sub'],['sSrc','src']]){$(id).checked=S[k];$(id).onchange=()=>{S[k]=$(id).checked;saveS();onSetting(k)}}
+  $('sCtx').value=S.ctx;$('sCtx').oninput=()=>{S.ctx=$('sCtx').value;saveS()};
+  $('srv').value=LS.get('ltv_srv','');$('srvKey').value=LS.get('ltv_srvKey','');$('srvGroq').value=LS.get('ltv_groq','');
+  $('srv').oninput=()=>{LS.set('ltv_srv',$('srv').value.trim());health=null;srvWarn()};
+  $('srvKey').oninput=()=>LS.set('ltv_srvKey',$('srvKey').value.trim());
+  $('srvGroq').oninput=()=>{$('srvGroq').value=$('srvGroq').value.replace(/\s+/g,'');LS.set('ltv_groq',$('srvGroq').value)};
+  $('srvTest').onclick=async()=>{health=null;st('srvSt','Đang kiểm tra… (máy chủ ngủ thì mất ~1 phút)');const h=await checkHealth(true);
+    if(!h)return;const groq=h.groq||$('srvGroq').value.trim();
+    st('srvSt',!groq?'Kết nối được, nhưng còn thiếu Mã Groq.':!h.film?'Kết nối được. Máy chủ bản cũ: chỉ dùng được chế độ Tức thời — vào Render bấm Manual Deploy để cập nhật.':'✓ Sẵn sàng: nghe, dịch và lồng tiếng phim.',groq&&h.film?'ok':'er');srvWarn()};
+  applySub();
+}
+function onSetting(k,old){
+  if(k==='size')applySub();
+  if(k==='sub'||k==='src')renderSub(true);
+  if(k==='duck'||k==='orig')duck(!!speaking);
+  if(k==='voiceVol')voiceEl.volume=S.voiceVol/100;
+  if(k==='voice'&&F){ttsCache.clear();if(S.voice==='off')stopSpeech()}
+  if(k==='mode'&&F&&old!==S.mode)restartPipeline();
+}
+function applySub(){document.documentElement.style.setProperty('--subsize',S.size+'px')}
+function st(id,t,c){const e=$(id);e.textContent=t||'';e.className='st'+(c?' '+c:'')}
+async function checkHealth(show){
+  if(health)return health;if(!srv.has){if(show)st('srvSt','Nhập địa chỉ máy chủ trước.','er');return null}
+  try{const r=await fetch(srv.base+'/api/health');health=await r.json();return health}
+  catch(e){if(show)st('srvSt','Không kết nối được máy chủ. Kiểm tra lại địa chỉ.','er');return null}
+}
+function srvWarn(){
+  const w=$('srvWarn');
+  if(!srv.has){w.innerHTML='⚠️ Chưa có máy chủ dịch. Vào <b>⚙️ Cài đặt → Máy chủ</b> để dán địa chỉ máy chủ và Mã Groq. Không có máy chủ thì chỉ đọc được phụ đề tiếng Việt có sẵn.';w.classList.remove('hide')}
+  else if(health&&!health.groq&&!$('srvGroq').value.trim()){w.innerHTML='⚠️ Máy chủ chưa có <b>Mã Groq</b>. Dán mã trong <b>⚙️ Cài đặt → Máy chủ</b>.';w.classList.remove('hide')}
+  else w.classList.add('hide');
+}
+
+/* ================= Lưu trữ phim (IndexedDB) ================= */
+const db=(()=>{let p;const open=()=>p||(p=new Promise((res,rej)=>{try{const r=indexedDB.open('phimviet',1);r.onupgradeneeded=()=>r.result.createObjectStore('films',{keyPath:'key'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}}));
+  const tx=(mode,fn)=>open().then(d=>new Promise(res=>{try{const t=d.transaction('films',mode),s=t.objectStore('films'),q=fn(s);t.oncomplete=()=>res(q&&q.result);t.onerror=()=>res(null)}catch(e){res(null)}})).catch(()=>null);
+  return {get:k=>tx('readonly',s=>s.get(k)),put:v=>tx('readwrite',s=>s.put(v)),del:k=>tx('readwrite',s=>s.delete(k)),all:()=>tx('readonly',s=>s.getAll())}})();
+let saveT=0;
+function saveFilm(now){
+  if(!F)return;clearTimeout(saveT);
+  const go=()=>db.put({key:F.key,name:F.name,size:F.size,dur:F.dur,pos:F.pos,cues:F.cues,cov:F.cov,lang:F.lang,srt:F.srt,updated:Date.now()});
+  if(now)go();else saveT=setTimeout(go,1500);
+}
+async function renderLib(){
+  const list=((await db.all())||[]).sort((a,b)=>b.updated-a.updated);
+  const box=$('films');if(!list.length)return;box.textContent='';
+  for(const r of list.slice(0,30)){
+    const d=document.createElement('label');d.className='film';
+    const tr=r.dur?Math.min(100,Math.round(covLen(r.cov||[],r)/r.dur*100)):0;
+    d.innerHTML=`<div class="th">🎬</div><div class="in"><div class="nm"></div><div class="mt"></div><div class="bar"><i></i></div></div><button class="del" aria-label="Xoá">🗑</button><input type="file" accept="video/*,.mkv,.mp4,.mov,.m4v,.webm">`;
+    d.querySelector('.nm').textContent=r.name;
+    d.querySelector('.mt').textContent=`${r.dur?'Đã xem '+fmt(r.pos)+' / '+fmt(r.dur):''}${r.srt?' · có phụ đề':''} · đã dịch ${tr}% · chạm để chọn lại tệp`;
+    d.querySelector('i').style.width=(r.dur?r.pos/r.dur*100:0)+'%';
+    d.querySelector('.del').onclick=async e=>{e.preventDefault();e.stopPropagation();if(confirm('Xoá bản dịch đã lưu của "'+r.name+'"?')){await db.del(r.key);d.remove()}};
+    d.querySelector('input').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)openFilm(f)};
+    box.append(d);
+  }
+}
+function covLen(cov,r){if(r&&r.srt)return r.cues&&r.cues.length?(r.cues.filter(c=>c.vi).length/r.cues.length)*(r.dur||0):0;return cov.reduce((a,[x,y])=>a+(y-x),0)}
+
+/* ================= Đoạn đã dịch (khoảng thời gian) ================= */
+function covAdd(a,b){const c=F.cov;c.push([a,b]);c.sort((x,y)=>x[0]-y[0]);const out=[];for(const r of c){const l=out[out.length-1];if(l&&r[0]<=l[1]+0.3)l[1]=Math.max(l[1],r[1]);else out.push([r[0],r[1]])}F.cov=out;paintCov()}
+function readyUntil(t){ // dịch xong tới đâu tính từ t (null = chỗ này chưa dịch)
+  if(!F)return null;
+  if(F.srt){const c=F.cues.find(c=>c.e>t&&!c.vi);return c?(c.s>t?c.s:null):F.dur||1e9}
+  for(const [a,b] of F.cov)if(a<=t+0.3&&t<b)return b;return null;
+}
+function nextGap(t){let p=readyUntil(t);if(p==null)p=t;return p}
+function nextCovStart(p){for(const [a] of F.cov)if(a>p+0.3)return a;return F.dur}
+function paintCov(){
+  if(!F||!F.dur)return;const d=F.dur,parts=[];
+  const ranges=F.srt?srtRanges():F.cov;
+  for(const [a,b] of ranges){const x=(a/d*100).toFixed(2),y=(b/d*100).toFixed(2);parts.push(`transparent ${x}%,rgba(255,210,122,.45) ${x}%,rgba(255,210,122,.45) ${y}%,transparent ${y}%`)}
+  $('cov').style.background=parts.length?`linear-gradient(90deg,${parts.join(',')})`:'none';
+}
+function srtRanges(){const out=[];let cur=null;for(const c of F.cues){if(c.vi){if(cur&&c.s-cur[1]<20)cur[1]=c.e;else{cur=[c.s,c.e];out.push(cur)}}}return out}
+
+/* ================= Phim đang mở ================= */
+let F=null;        // {key,name,size,file,dur,pos,cues,cov,lang,srt,ix,mode}
+let pendingSrt=null; // phụ đề gốc chọn ở trang chủ
+const video=$('v'),player=$('player');
+let actx=null,srcNode=null,gainNode=null,graphOK=false;
+
+$('fFilm').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)openFilm(f)};
+$('fSub').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  const cues=parseSubs(await f.text());if(!cues.length){alert('Không đọc được phụ đề trong tệp này.');return}
+  pendingSrt={name:f.name,cues};$('subLbl').innerHTML='📝 <b></b> · '+cues.length+' câu';$('subLbl').querySelector('b').textContent=f.name;$('subClr').classList.remove('hide')};
+$('subClr').onclick=e=>{e.preventDefault();pendingSrt=null;$('subLbl').innerHTML='Có phụ đề gốc (.srt)? <b>Thêm vào</b> — dịch chuẩn hơn';$('subClr').classList.add('hide')};
+
+async function openFilm(file){
+  closeFilm(true);
+  const key=file.name+'|'+file.size,rec=await db.get(key)||{};
+  F={key,name:file.name.replace(/\.[^.]+$/,''),size:file.size,file,dur:rec.dur||0,pos:rec.pos||0,cues:rec.cues||[],cov:rec.cov||[],lang:rec.lang||null,srt:!!rec.srt,ix:null,mode:null,gen:0};
+  if(pendingSrt){F.cues=pendingSrt.cues;F.cov=[];F.srt=true;pendingSrt=null;$('subClr').click()}
+  $('ttl').textContent=F.name;$('home').classList.add('hide');player.classList.remove('hide');$('filmTools').classList.remove('hide');
+  firstPlay=true;video.src=URL.createObjectURL(file);video.load();
+  showUI(true);setBadge('Đang chuẩn bị…');
+  try{history.pushState({p:1},'')}catch(e){}
+}
+function closeFilm(silent){
+  if(!F)return;F.pos=video.currentTime||F.pos;saveFilm(true);
+  stopPipeline();stopSpeech();waiting=false;$('wait').classList.add('hide');
+  try{video.pause();URL.revokeObjectURL(video.src)}catch(e){}video.removeAttribute('src');video.load();
+  F=null;releaseWake();
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+  if(!silent){player.classList.add('hide');$('home').classList.remove('hide');$('filmTools').classList.add('hide');renderLib()}
+}
+$('back').onclick=()=>{if(history.state&&history.state.p)history.back();else closeFilm()};
+addEventListener('popstate',()=>{if(F)closeFilm()});
+
+video.addEventListener('loadedmetadata',async()=>{
+  if(!F)return;F.dur=video.duration||F.dur;
+  if(F.pos>20&&F.pos<F.dur-60){const p=F.pos;video.currentTime=p;toast(`Xem tiếp từ ${fmt(p)}`,'Xem từ đầu',()=>{video.currentTime=0;onSeek()})}
+  paintCov();updTime();await choosePipeline();
+});
+video.addEventListener('error',()=>{if(!F)return;setBadge('Điện thoại không phát được định dạng phim này. Hãy dùng tệp MP4 (H.264).',true);showUI(true)});
+
+/* ================= Âm thanh: tiếng gốc qua Web Audio để hạ nhỏ khi lồng ================= */
+function ensureGraph(){
+  try{
+    if(!actx){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return false;actx=new AC()}
+    if(actx.state!=='running')actx.resume().catch(()=>{});
+    if(!srcNode){srcNode=actx.createMediaElementSource(video);gainNode=actx.createGain();srcNode.connect(gainNode);gainNode.connect(actx.destination)}
+    graphOK=true;
+  }catch(e){graphOK=false}
+  return graphOK;
+}
+function duck(on){
+  const v=(on?S.duck:S.orig)/100;
+  if(graphOK&&gainNode){gainNode.gain.setTargetAtTime(v,actx.currentTime,0.12);video.volume=1}
+  else{try{video.volume=v}catch(e){}}
+}
+
+/* ================= Giọng đọc ================= */
+const voiceEl=new Audio();voiceEl.preload='auto';try{voiceEl.preservesPitch=true;voiceEl.webkitPreservesPitch=true}catch(e){}
+voiceEl.volume=S.voiceVol/100;
+let unlocked=false;
+function unlockAudio(){
+  if(unlocked)return;unlocked=true;
+  try{voiceEl.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';voiceEl.play().catch(()=>{})}catch(e){}
+  if('speechSynthesis' in window){try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u)}catch(e){}}
+}
+const ttsCache=new Map();
+function ttsParams(c){
+  const t=c.tts||{};
+  if(S.voice==='auto')return {voice:t.voice||(t.g==='m'?'vi-VN-NamMinhNeural':'vi-VN-HoaiMyNeural'),pitch:t.pitch||0,rate:t.rate||0,volume:t.volume||0};
+  return {voice:S.voice,pitch:0,rate:t.rate||0,volume:t.volume||0};
+}
+function ttsUrl(c){
+  const a=ttsParams(c),k=[a.voice,a.pitch,a.rate,a.volume,c.vi].join('|');
+  if(ttsCache.has(k)){const p=ttsCache.get(k);ttsCache.delete(k);ttsCache.set(k,p);return p}
+  const p=fetch(`${srv.base}/api/tts?voice=${a.voice}&pitch=${a.pitch}&rate=${a.rate}&volume=${a.volume}&text=${encodeURIComponent(c.vi)}`,{headers:srv.head()})
+    .then(r=>{if(!r.ok)throw new Error('tts');return r.blob()}).then(b=>URL.createObjectURL(b));
+  p.catch(()=>ttsCache.delete(k));ttsCache.set(k,p);
+  while(ttsCache.size>120){const [k0,p0]=ttsCache.entries().next().value;ttsCache.delete(k0);p0.then(u=>URL.revokeObjectURL(u)).catch(()=>{})}
+  return p;
+}
+const useServerVoice=()=>srv.has&&S.voice!=='device'&&S.voice!=='off'&&!(health&&health.tts===false);
+function prefetch(t){
+  if(!F||!useServerVoice()||!S.dub||F.mode==='live')return;
+  const i0=cueIdx(t);let n=0;
+  for(let i=Math.max(0,i0);i<F.cues.length&&n<8;i++){const c=F.cues[i];if(c.s>t+30)break;if(c.e<t||!c.vi)continue;ttsUrl(c).catch(()=>{});n++}
+}
+let viVoice=null;
+function pickDeviceVoice(){if(!('speechSynthesis' in window))return;const vs=speechSynthesis.getVoices().filter(v=>/^vi/i.test(v.lang));
+  viVoice=vs.sort((a,b)=>(/natural|online|neural|enhanced|premium|siri/i.test(b.name)?1:0)-(/natural|online|neural|enhanced|premium|siri/i.test(a.name)?1:0))[0]||null}
+if('speechSynthesis' in window){pickDeviceVoice();speechSynthesis.onvoiceschanged=pickDeviceVoice}
+function sayDevice(text,rate,done){
+  if(!('speechSynthesis' in window)){setTimeout(done,Math.min(6000,text.length*70));return}
+  const u=new SpeechSynthesisUtterance(text);u.lang='vi-VN';if(viVoice)u.voice=viVoice;u.rate=Math.min(2,rate*1.05);u.volume=S.voiceVol/100;
+  u.onend=done;u.onerror=done;speechSynthesis.cancel();speechSynthesis.speak(u);
+}
+
+/* Hàng đợi đọc */
+let speaking=null,queue=[],watchT=0,lastT=0,spkGen=0;
+function stopSpeech(){
+  spkGen++;queue=[];speaking=null;clearTimeout(watchT);
+  try{voiceEl.pause()}catch(e){}if('speechSynthesis' in window)try{speechSynthesis.cancel()}catch(e){}
+  $('spk').classList.add('hide');duck(false);
+}
+function pump(){
+  if(speaking||!queue.length||video.paused||!S.dub||S.voice==='off')return;
+  const t=video.currentTime;let c=queue.shift();
+  while(c&&F.mode!=='live'&&t>c.e+1.2)c=queue.shift(); // trễ quá thì bỏ
+  if(!c)return;
+  const g=++spkGen;speaking=c;duck(true);$('spk').classList.remove('hide');
+  if(F.mode==='live')renderLiveSub(c);
+  const behind=Math.max(0,t-c.s),isLive=F.mode==='live';
+  let rate=S.rate*(1+Math.min(isLive?0.45:0.3,behind*(isLive?0.04:0.12)+queue.length*0.12));
+  const next=isLive?null:F.cues[F.cues.indexOf(c)+1],slot=Math.max(0.8,(isLive?99:((next&&next.s>c.s?next.s:c.e+1.2)-Math.max(t,c.s))));
+  const fin=()=>{if(g!==spkGen)return;clearTimeout(watchT);speaking=null;$('spk').classList.add('hide');if(!queue.length)duck(false);if(F&&F.mode==='live')renderLiveSub(null);pump()};
+  watchT=setTimeout(fin,(c.vi.length/13/rate)*1000+5000);
+  const dev=()=>sayDevice(c.vi,rate,fin);
+  if(!useServerVoice()&&!c.audio){dev();return}
+  const go=url=>{if(g!==spkGen)return;voiceEl.src=url;voiceEl.volume=S.voiceVol/100;
+    voiceEl.onloadedmetadata=()=>{const d=voiceEl.duration;if(d&&isFinite(d)&&d/rate>slot)rate=Math.min(1.6,d/slot);voiceEl.playbackRate=rate};
+    voiceEl.playbackRate=rate;voiceEl.onended=fin;voiceEl.onerror=()=>{if(g===spkGen)dev()};voiceEl.play().catch(()=>{if(g===spkGen)dev()})};
+  if(c.audio)go(c.audio);else ttsUrl(c).then(go).catch(()=>{if(g===spkGen)dev()});
+}
+
+/* ================= Phụ đề ================= */
+let shownCue=undefined;
+function cueIdx(t){const a=F?F.cues:[];let lo=0,hi=a.length-1,r=-1;while(lo<=hi){const m=(lo+hi)>>1;if(a[m].s<=t){r=m;lo=m+1}else hi=m-1}return r}
+function renderSub(force){
+  if(!F||F.mode==='live'){if(force&&F)renderLiveSub(speaking);return}
+  const t=video.currentTime,i=cueIdx(t),c=i>=0&&F.cues[i].e+0.5>t?F.cues[i]:null;
+  if(c===shownCue&&!force)return;shownCue=c;subHTML(c);
+}
+function renderLiveSub(c){subHTML(c)}
+function subHTML(c){
+  const s=$('sub');s.textContent='';if(!c||!S.sub)return;
+  const txt=c.vi||(S.src?'':null);if(txt===null)return;
+  if(c.vi){const a=document.createElement('span');a.className='vi';a.textContent=c.vi;s.append(a)}
+  if(S.src&&c.src&&c.src!==c.vi){const m=document.createElement('span');m.className='src';const b=document.createElement('span');b.textContent=c.src;m.append(b);s.append(m)}
+}
+
+/* ================= Vòng lặp phát ================= */
+let waiting=false,firstPlay=true,tickN=0;
+setInterval(tick,100);
+function tick(){
+  if(!F||player.classList.contains('hide'))return;
+  const t=video.currentTime;
+  updTime();renderSub();
+  if(F.mode!=='live'){
+    if(!video.paused&&!video.seeking&&S.dub&&S.voice!=='off'){
+      // đưa các câu vừa tới giờ vào hàng đợi
+      if(t<lastT-0.5||t-lastT>3)lastT=t-0.15;
+      let i=cueIdx(lastT)+1;
+      for(;i<F.cues.length&&F.cues[i].s<=t;i++){const c=F.cues[i];if(c.vi&&c!==speaking&&!queue.includes(c)&&t-c.s<1.5)queue.push(c)}
+      lastT=t;pump();
+    }else lastT=t;
+    holdCheck(t);
+  }
+  if(++tickN%10===0)prefetch(t);
+  if(!video.paused&&Math.abs(t-F.pos)>5){F.pos=t;saveFilm()}
+}
+function needHold(){return F&&S.dub&&S.hold&&F.mode&&F.mode!=='live'&&(F.srt?F.cues.some(c=>!c.vi):true)&&pipe}
+function holdCheck(t){
+  if(!needHold()){if(waiting)endWait();return}
+  const r=readyUntil(t),end=F.dur&&t>F.dur-1;
+  if(!waiting&&!video.paused&&!end&&(r==null||r<t+0.8)&&!(r!=null&&r>=F.dur-0.5)){waiting=true;video.pause();showWait()}
+  else if(waiting&&(end||(r!=null&&(r>=t+(firstChunk?12:8)||r>=F.dur-0.5)))){endWait();video.play().catch(()=>showUI(true))}
+}
+let waitStart=0;
+function showWait(){waitStart=Date.now();$('wait').classList.remove('hide');updWait()}
+function updWait(){if(!waiting)return;const s=(Date.now()-waitStart)/1000;
+  $('waitTx').textContent=firstChunk?(s<15?'Đang nghe và dịch đoạn đầu phim… (khoảng 10–20 giây)':'Máy chủ đang khởi động hoặc mạng chậm, chờ thêm chút… (lần đầu trong ngày có thể ~1 phút)')
+    :(s<10?'Đang dịch tiếp, chờ vài giây…':'Dịch chưa kịp, mạng hoặc máy chủ đang chậm…');setTimeout(updWait,1000)}
+function endWait(){waiting=false;$('wait').classList.add('hide')}
+$('noDub').onclick=()=>{setDub(false);endWait();video.play().catch(()=>{})};
+
+/* ================= Điều khiển ================= */
+let uiT=0;
+function showUI(stay){player.classList.add('ui');clearTimeout(uiT);if(!stay&&!video.paused)uiT=setTimeout(()=>player.classList.remove('ui'),3500)}
+function hideUI(){if(!video.paused)player.classList.remove('ui')}
+function updTime(){
+  const d=F&&F.dur||video.duration||0,t=video.currentTime||0;
+  $('tm').textContent=fmt(t)+' / '+fmt(d);
+  if(!seeking)$('seek').value=d?Math.round(t/d*1000):0;$('done').style.width=(d?t/d*100:0)+'%';
+}
+async function playToggle(){
+  if(!F)return;
+  if(video.paused||waiting){
+    unlockAudio();ensureGraph();duck(false);
+    if(firstPlay){firstPlay=false;if(!isIOS)enterFS()}
+    if(waiting)return;
+    try{await video.play()}catch(e){showUI(true)}
+  }else{video.pause()}
+}
+$('pp').onclick=e=>{e.stopPropagation();playToggle()};
+video.addEventListener('play',()=>{$('pp').textContent='❚❚';showUI();requestWake();if(voiceEl.src&&speaking&&voiceEl.paused&&!voiceEl.ended)voiceEl.play().catch(()=>{})});
+video.addEventListener('pause',()=>{$('pp').textContent='▶';showUI(true);if(!waiting){const srvVoice=!voiceEl.paused;try{voiceEl.pause()}catch(e){}if(speaking&&!srvVoice)stopSpeech()}if(F){F.pos=video.currentTime;saveFilm()}releaseWake()});
+video.addEventListener('seeking',onSeek);
+video.addEventListener('ended',()=>{stopSpeech();showUI(true)});
+function onSeek(){stopSpeech();lastT=video.currentTime-0.15;shownCue=undefined;if(F&&F.mode==='live'&&live)liveReset();if(pipeWake)pipeWake()}
+function seekBy(d){if(!F)return;video.currentTime=Math.max(0,Math.min((F.dur||video.duration)-0.5,video.currentTime+d))}
+$('rw').onclick=e=>{e.stopPropagation();seekBy(-10);showUI()};$('ff').onclick=e=>{e.stopPropagation();seekBy(10);showUI()};
+let seeking=false;
+$('seek').oninput=()=>{seeking=true;const d=F&&F.dur||0;$('tm').textContent=fmt($('seek').value/1000*d)+' / '+fmt(d);showUI(true)};
+$('seek').onchange=()=>{seeking=false;const d=F&&F.dur||0;video.currentTime=$('seek').value/1000*d;showUI()};
+// Chạm: 1 lần hiện/ẩn điều khiển, 2 lần ở mép trái/phải để tua 10 giây
+let lastTap={t:0,z:''},tapT=0;
+for(const el of document.querySelectorAll('.tap'))el.addEventListener('click',e=>{
+  const z=el.dataset.z,now=Date.now();
+  if(z!=='c'&&now-lastTap.t<320&&lastTap.z===z){clearTimeout(tapT);seekBy(z==='l'?-10:10);ripple(z);lastTap={t:now,z};return}
+  lastTap={t:now,z};clearTimeout(tapT);
+  tapT=setTimeout(()=>{player.classList.contains('ui')?hideUI():showUI()},z==='c'?0:260);
+});
+function ripple(z){const r=document.createElement('div');r.className='ripple';r.style[z==='l'?'left':'right']='8%';r.textContent=z==='l'?'↺ 10 giây':'10 giây ↻';player.append(r);setTimeout(()=>r.remove(),650)}
+function setDub(on){S.dub=on;saveS();$('dubBtn').classList.toggle('on',on);if(!on){stopSpeech();endWait()}else if(F&&!pipe)startPipeline()}
+$('dubBtn').onclick=()=>{setDub(!S.dub);showUI()};
+$('ccBtn').onclick=()=>{S.sub=!S.sub;saveS();$('sSub').checked=S.sub;$('ccBtn').classList.toggle('on',S.sub);renderSub(true);showUI()};
+$('dubBtn').classList.toggle('on',S.dub);$('ccBtn').classList.toggle('on',S.sub);
+function enterFS(){
+  const el=document.documentElement;
+  if(document.fullscreenEnabled&&!document.fullscreenElement){el.requestFullscreen({navigationUI:'hide'}).then(()=>{try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){}}).catch(()=>{})}
+}
+$('fsBtn').onclick=()=>{
+  if(document.fullscreenElement){document.exitFullscreen().catch(()=>{});try{screen.orientation.unlock()}catch(e){}}
+  else if(document.fullscreenEnabled)enterFS();
+  else toast(standalone?'Xoay ngang điện thoại để xem toàn màn hình.':'Xoay ngang điện thoại. Cài app lên màn hình chính để ẩn thanh Safari.');
+};
+// Giữ màn hình sáng khi xem
+let wake=null;
+async function requestWake(){try{if('wakeLock' in navigator&&!wake){wake=await navigator.wakeLock.request('screen');wake.addEventListener('release',()=>wake=null)}}catch(e){}}
+function releaseWake(){try{wake&&wake.release()}catch(e){}wake=null}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&F&&!video.paused)requestWake()});
+
+function setBadge(t,er){$('badgeTx').textContent=t;$('badge').classList.toggle('er',!!er)}
+let toastT=0;
+function toast(t,btn,fn){document.querySelectorAll('.toast').forEach(x=>x.remove());const d=document.createElement('div');d.className='toast';const s=document.createElement('span');s.textContent=t;d.append(s);
+  if(btn){const b=document.createElement('button');b.textContent=btn;b.onclick=()=>{fn();d.remove()};d.append(b)}
+  (F?player:document.body).append(d);clearTimeout(toastT);toastT=setTimeout(()=>d.remove(),6000)}
+
+/* ================= Bảng cài đặt ================= */
+function openSheet(){$('sheet').classList.remove('hide');$('sheetBg').classList.remove('hide');$('sheet').scrollTop=0}
+function closeSheet(){$('sheet').classList.add('hide');$('sheetBg').classList.add('hide')}
+$('openSet').onclick=openSheet;$('pSet').onclick=e=>{e.stopPropagation();openSheet()};$('closeSet').onclick=closeSheet;$('sheetBg').onclick=closeSheet;
+$('expSrt').onclick=()=>{if(!F)return;const srt=F.cues.filter(c=>c.vi).map((c,i)=>`${i+1}\n${ts(c.s)} --> ${ts(c.e)}\n${c.vi}\n`).join('\n');
+  if(!srt){toast('Chưa có câu nào được dịch.');return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([srt],{type:'text/plain;charset=utf-8'}));a.download=F.name+'.vi.srt';document.body.append(a);a.click();a.remove()};
+$('redo').onclick=()=>{if(!F||!confirm('Xoá bản dịch đã lưu của phim này và dịch lại?'))return;
+  if(F.srt)F.cues.forEach(c=>{c.vi='';delete c.tts});else{F.cues=[];F.cov=[]}
+  F.lang=null;saveFilm(true);paintCov();closeSheet();restartPipeline()};
+const ts=s=>{const ms=Math.round(s*1000),h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),x=Math.floor(ms%60000/1000);return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')},${String(ms%1000).padStart(3,'0')}`};
+
+/* ================= Phụ đề gốc .srt / .vtt ================= */
+function parseSubs(tx){
+  tx=tx.replace(/\r/g,'').replace(/^﻿/,'');
+  const out=[],re=/(\d+:)?(\d{1,2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d+:)?(\d{1,2}):(\d{2})[,.](\d{1,3})[^\n]*\n([\s\S]*?)(?=\n\s*\n|$)/g;
+  const sec=(h,m,s,ms)=>(h?parseInt(h):0)*3600+parseInt(m)*60+parseInt(s)+parseInt(ms.padEnd(3,'0'))/1000;
+  let m;while((m=re.exec(tx))){const text=m[9].replace(/<[^>]+>/g,'').replace(/\{\\[^}]*\}/g,'').replace(/\n+/g,' ').trim();
+    if(text)out.push({s:sec(m[1],m[2],m[3],m[4]),e:sec(m[5],m[6],m[7],m[8]),src:text,vi:''})}
+  out.sort((a,b)=>a.s-b.s);
+  const vi=out.filter(c=>/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(c.src)).length;
+  if(out.length&&vi/out.length>0.5)out.forEach(c=>c.vi=c.src); // phụ đề tiếng Việt sẵn: chỉ cần đọc
+  return out;
+}
+
+/* ================= Tách âm thanh AAC ngay trên điện thoại ================= */
+async function boxAt(file,pos){
+  const dv=new DataView(await file.slice(pos,pos+16).arrayBuffer());if(dv.byteLength<8)return null;
+  let size=dv.getUint32(0),hdr=8;const type=String.fromCharCode(dv.getUint8(4),dv.getUint8(5),dv.getUint8(6),dv.getUint8(7));
+  if(size===1){size=Number(dv.getBigUint64(8));hdr=16}else if(size===0)size=file.size-pos;
+  return {pos,size,type,hdr};
+}
+function kids(dv,start,end){const out=[];let p=start;
+  while(p+8<=end){let size=dv.getUint32(p),hdr=8;const type=String.fromCharCode(dv.getUint8(p+4),dv.getUint8(p+5),dv.getUint8(p+6),dv.getUint8(p+7));
+    if(size===1){size=Number(dv.getBigUint64(p+8));hdr=16}else if(size===0)size=end-p;if(size<hdr||p+size>end)break;
+    out.push({type,start:p+hdr,end:p+size});p+=size}
+  return out}
+const kid=(dv,b,t)=>b&&kids(dv,b.start,b.end).find(k=>k.type===t);
+function descLen(u8,p){let len=0,n=0,c;do{c=u8[p+n];len=(len<<7)|(c&0x7f);n++}while(c&0x80&&n<4);return [len,n]}
+function findASC(u8,from,to){
+  for(let i=from;i<to-4;i++){
+    if(u8[i]===0x65&&u8[i+1]===0x73&&u8[i+2]===0x64&&u8[i+3]===0x73){
+      let p=i+8;if(u8[p]!==3)continue;p++;let [l,n]=descLen(u8,p);p+=n;
+      p+=2;const fl=u8[p++];if(fl&0x80)p+=2;if(fl&0x40)p+=u8[p]+1;if(fl&0x20)p+=2;
+      if(u8[p]!==4)continue;p++;[l,n]=descLen(u8,p);p+=n;p+=13;
+      if(u8[p]!==5)continue;p++;[l,n]=descLen(u8,p);p+=n;return u8.slice(p,p+l)}
+  }return null}
+// Lập bảng vị trí + thời điểm của từng khung AAC (không đọc cả tệp phim)
+async function aacIndex(file){
+  let pos=0,moov=null;
+  for(let g=0;pos<file.size&&g<10000;g++){const b=await boxAt(file,pos);if(!b||b.size<8)break;if(b.type==='moov'){moov=b;break}pos+=b.size}
+  if(!moov)throw new Error('Không phải tệp MP4/MOV');
+  if(moov.size>200*1048576)throw new Error('Tệp lạ');
+  const buf=await file.slice(moov.pos,moov.pos+moov.size).arrayBuffer(),dv=new DataView(buf),u8=new Uint8Array(buf);
+  for(const trak of kids(dv,moov.hdr,moov.size).filter(k=>k.type==='trak')){
+    const mdia=kid(dv,trak,'mdia'),hdlr=kid(dv,mdia,'hdlr'),mdhd=kid(dv,mdia,'mdhd');if(!hdlr||!mdhd)continue;
+    if(String.fromCharCode(u8[hdlr.start+8],u8[hdlr.start+9],u8[hdlr.start+10],u8[hdlr.start+11])!=='soun')continue;
+    const scale=u8[mdhd.start]===1?dv.getUint32(mdhd.start+20):dv.getUint32(mdhd.start+12);
+    const stbl=kid(dv,kid(dv,mdia,'minf'),'stbl'),stsd=kid(dv,stbl,'stsd');if(!stsd)continue;
+    const entry=kids(dv,stsd.start+8,stsd.end)[0];if(!entry)continue;
+    if(entry.type!=='mp4a')throw new Error('Âm thanh không phải AAC ('+entry.type+')');
+    const ch0=dv.getUint16(entry.start+16),sr0=dv.getUint32(entry.start+24)>>>16,asc=findASC(u8,entry.start,entry.end);
+    const RATES=[96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,11025,8000,7350];
+    let obj=2,srIdx=RATES.indexOf(sr0),chans=ch0||2;
+    if(asc&&asc.length>=2){obj=asc[0]>>3;srIdx=((asc[0]&7)<<1)|(asc[1]>>7);chans=(asc[1]>>3)&0xf||chans}
+    if(srIdx<0||srIdx>12)srIdx=4;
+    const prof=Math.max(0,Math.min(3,(obj===5||obj===29?2:obj)-1));
+    const stsz=kid(dv,stbl,'stsz'),stsc=kid(dv,stbl,'stsc'),stco=kid(dv,stbl,'stco'),co64=kid(dv,stbl,'co64'),stts=kid(dv,stbl,'stts');
+    if(!stsz||!stsc||!(stco||co64)||!stts)throw new Error('Tệp MP4 thiếu bảng mẫu');
+    const fixed=dv.getUint32(stsz.start+4),n=dv.getUint32(stsz.start+8);
+    const sizes=new Uint32Array(n),offs=new Float64Array(n),times=new Float64Array(n);
+    for(let i=0;i<n;i++)sizes[i]=fixed||dv.getUint32(stsz.start+12+i*4);
+    // thời điểm
+    let k=0,acc=0;const ne=dv.getUint32(stts.start+4);
+    for(let e=0;e<ne&&k<n;e++){const cnt=dv.getUint32(stts.start+8+e*8),dl=dv.getUint32(stts.start+12+e*8);for(let j=0;j<cnt&&k<n;j++){times[k++]=acc/scale;acc+=dl}}
+    for(;k<n;k++)times[k]=acc/scale;
+    // vị trí trong tệp
+    const co=stco||co64,nCh=dv.getUint32(co.start+4),nSc=dv.getUint32(stsc.start+4);
+    let s=0,e=0;
+    for(let c=0;c<nCh&&s<n;c++){
+      while(e+1<nSc&&dv.getUint32(stsc.start+8+(e+1)*12)<=c+1)e++;
+      const per=dv.getUint32(stsc.start+12+e*12);let off=stco?dv.getUint32(co.start+8+c*4):Number(dv.getBigUint64(co.start+8+c*8));
+      for(let j=0;j<per&&s<n;j++){offs[s]=off;off+=sizes[s];s++}
+    }
+    return {n:s,sizes,offs,times,dur:acc/scale,prof,srIdx,chans};
+  }
+  throw new Error('Phim không có tiếng');
+}
+function lowerBound(a,n,x){let lo=0,hi=n;while(lo<hi){const m=(lo+hi)>>1;if(a[m]<x)lo=m+1;else hi=m}return lo}
+async function aacSlice(ix,t0,t1){
+  const i0=lowerBound(ix.times,ix.n,t0),i1=Math.min(ix.n,lowerBound(ix.times,ix.n,t1));
+  if(i1<=i0)return null;
+  const parts=[],{prof,srIdx,chans}=ix;
+  const adts=len=>{const l=len+7;return new Uint8Array([0xFF,0xF1,(prof<<6)|(srIdx<<2)|(chans>>2),((chans&3)<<6)|(l>>11),(l>>3)&0xFF,((l&7)<<5)|0x1F,0xFC])};
+  let i=i0;
+  while(i<i1){ // đọc từng cụm khung nằm liền nhau
+    let j=i+1,end=ix.offs[i]+ix.sizes[i];
+    while(j<i1&&ix.offs[j]===end&&end-ix.offs[i]<4194304){end+=ix.sizes[j];j++}
+    const data=new Uint8Array(await ix.file.slice(ix.offs[i],end).arrayBuffer());
+    let p=0;for(let k=i;k<j;k++){const z=ix.sizes[k];parts.push(adts(z),data.subarray(p,p+z));p+=z}
+    i=j;
+  }
+  return {blob:new Blob(parts,{type:'audio/aac'}),t0:ix.times[i0],t1:i1<ix.n?ix.times[i1]:ix.dur};
+}
+
+/* ================= Dây chuyền dịch ================= */
+let pipe=null,pipeWake=null,firstChunk=true;
+const LEAD=100; // luôn dịch trước ~100 giây so với chỗ đang xem
+const LANGS={vietnamese:'vi',english:'en',chinese:'zh',japanese:'ja',korean:'ko',thai:'th',french:'fr',spanish:'es',german:'de',russian:'ru',indonesian:'id',hindi:'hi',portuguese:'pt',italian:'it',cantonese:'yue'};
+const langCode=l=>{l=String(l||'').toLowerCase();return LANGS[l]||(l.length<=3?l:null)};
+function waitWake(ms){return new Promise(r=>{const t=setTimeout(()=>{pipeWake=null;r()},ms);pipeWake=()=>{clearTimeout(t);pipeWake=null;r()}})}
+function stopPipeline(){if(pipe)pipe.stop=true;pipe=null;if(pipeWake)pipeWake();stopLive()}
+function restartPipeline(){stopPipeline();stopSpeech();endWait();choosePipeline()}
+async function choosePipeline(){
+  if(!F)return;const myF=F;stopPipeline();
+  if(F.srt){
+    if(F.cues.every(c=>c.vi)){F.mode='srt';setBadge('Phụ đề tiếng Việt · '+F.cues.length+' câu');return}
+    if(!srv.has){F.mode='srt';setBadge('Cần máy chủ để dịch phụ đề (⚙️ Cài đặt)',true);return}
+    F.mode='srt';startPipeline();return;
+  }
+  if(!srv.has){F.mode='pre';setBadge(F.cov.length?'Đang dùng bản dịch đã lưu':'Chưa có máy chủ dịch — vào ⚙️ Cài đặt',!F.cov.length);return}
+  await Promise.race([checkHealth(),sleep(3000)]);if(F!==myF)return;const h=health;
+  let mode=S.mode;
+  if(mode!=='live'){
+    try{F.ix=await aacIndex(F.file);F.ix.file=F.file;mode='pre'}
+    catch(e){
+      if(S.mode==='pre')toast('Không dịch trước được: '+e.message+'. Chuyển sang ⚡ Tức thời.');
+      else if(!F.cov.length)toast('Phim này dùng chế độ ⚡ Tức thời ('+e.message+').');
+      mode=F.cov.length?'pre':'live';
+    }
+    if(mode==='pre'&&h&&!h.film){toast('Máy chủ bản cũ chưa hỗ trợ dịch trước. Đang dùng ⚡ Tức thời.');mode='live'}
+  }
+  F.mode=mode;
+  startPipeline();
+}
+function startPipeline(){
+  if(!F||!S.dub)return;
+  if(F.mode==='live'){startLive();return}
+  if(F.mode==='pre'&&!F.ix){setBadge('Đang dùng bản dịch đã lưu');return}
+  const P={stop:false};pipe=P;firstChunk=!F.cov.some(([a,b])=>a<=video.currentTime+0.3&&b>video.currentTime);
+  (F.mode==='srt'?srtLoop:preLoop)(P,F);
+}
+async function preLoop(P,myF){
+  let err=0;
+  while(!P.stop&&F===myF){
+    const t=video.currentTime||0,dur=myF.ix.dur||myF.dur;
+    const ru=readyUntil(t),p=ru!=null?ru:nextGap(Math.max(0,t-1));
+    const pct=Math.round(covLen(myF.cov)/dur*100);
+    if(p>=dur-0.3){setBadge(`Đã dịch xong ${pct>=99?'cả phim':pct+'%'} · ${myF.cues.length} câu`);await waitWake(3000);continue}
+    if(p>t+LEAD){setBadge(`Đã dịch trước tới ${fmt(p)}`);await waitWake(1500);continue}
+    const lim=Math.min(dur,nextCovStart(p));
+    let end=Math.min(p+(p-t<20?30:60),lim);if(lim-end<10)end=lim;
+    setBadge(`Đang dịch ${fmt(p)}–${fmt(end)}…`);
+    try{
+      const sl=await aacSlice(myF.ix,p,end);
+      if(!sl){covAdd(p,end);continue}
+      const fd=new FormData();fd.append('file',sl.blob,'clip.aac');fd.append('offset',sl.t0.toFixed(3));
+      const lang=S.lang||myF.lang;if(lang)fd.append('lang',lang);
+      const prev=myF.cues.filter(c=>c.s<p).slice(-3).map(c=>c.src);if(prev.length)fd.append('prev',JSON.stringify(prev));
+      if(S.tone)fd.append('tone',S.tone);if(S.ctx.trim())fd.append('context',S.ctx.trim());
+      fd.append('session','phim:'+myF.key);fd.append('title',myF.name);
+      const r=await fetch(srv.base+'/api/film/chunk',{method:'POST',headers:srv.head(),body:fd});
+      if(!r.ok){const m=await srvErr(r);if(r.status===404&&!/hết hạn/.test(m)){toast('Máy chủ chưa hỗ trợ dịch trước, chuyển sang ⚡ Tức thời.');myF.mode='live';pipe=null;startLive();return}throw new Error(m)}
+      const j=await r.json();if(P.stop||F!==myF)return;
+      if(j.language&&!myF.lang)myF.lang=langCode(j.language);
+      const add=(j.items||[]).filter(x=>x.vi||x.src).map(x=>({s:x.start,e:Math.max(x.end,x.start+0.4),src:x.src,vi:(x.vi||x.src||'').trim(),tts:x.tts}));
+      // bỏ câu trùng ở mép đoạn
+      const keep=add.filter(c=>!myF.cues.some(o=>Math.abs(o.s-c.s)<0.3));
+      myF.cues.push(...keep);myF.cues.sort((a,b)=>a.s-b.s);
+      covAdd(p,end);saveFilm();err=0;
+      if(firstChunk&&readyUntil(video.currentTime)!=null)firstChunk=false;
+      prefetch(video.currentTime);
+      if(j.profile&&j.profile.genre&&!myF.shownProfile){myF.shownProfile=1;toast('🎯 '+[j.profile.genre,j.profile.tone].filter(Boolean).join(' · '))}
+    }catch(e){
+      err++;setBadge('Mạng chậm, đang thử lại… '+(e.message||''),true);
+      if(err>=4&&/Groq|mã|Sai/i.test(e.message||'')){toast(e.message);await waitWake(15000)}
+      await waitWake(Math.min(20000,1500*err));
+    }
+  }
+}
+async function srtLoop(P,myF){
+  let err=0;
+  while(!P.stop&&F===myF){
+    const t=video.currentTime||0,i0=myF.cues.findIndex(c=>c.e>t-1&&!c.vi);
+    const done=myF.cues.filter(c=>c.vi).length;
+    if(i0<0){setBadge(`Phụ đề: đã dịch ${done}/${myF.cues.length} câu`);if(done===myF.cues.length){setBadge('Đã dịch xong phụ đề · '+done+' câu');saveFilm();return}await waitWake(3000);continue}
+    if(myF.cues[i0].s>t+LEAD){setBadge(`Đã dịch trước tới ${fmt(myF.cues[i0].s)}`);await waitWake(1500);continue}
+    const batch=[];for(let i=i0;i<myF.cues.length&&batch.length<(firstChunk?15:35);i++){if(!myF.cues[i].vi)batch.push(i);else break}
+    setBadge(`Đang dịch phụ đề ${fmt(myF.cues[i0].s)}…`);
+    try{
+      const items=batch.map(i=>({id:i,text:myF.cues[i].src,sec:+(myF.cues[i].e-myF.cues[i].s).toFixed(1)}));
+      const prev=myF.cues.slice(Math.max(0,i0-3),i0).map(c=>c.src);
+      const body={items,prev,session:'phim:'+myF.key,title:myF.name,direct:'auto'};if(S.tone)body.tone=S.tone;if(S.ctx.trim())body.context=S.ctx.trim();
+      const r=await fetch(srv.base+'/api/translate',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},srv.head()),body:JSON.stringify(body)});
+      if(!r.ok)throw new Error(await srvErr(r));
+      const j=await r.json();if(P.stop||F!==myF)return;
+      for(const o of j.items||[]){const c=myF.cues[o.id];if(c&&batch.includes(o.id)){c.vi=String(o.vi||'').trim()||c.src;c.tts=o.tts}}
+      for(const i of batch)if(!myF.cues[i].vi)myF.cues[i].vi=myF.cues[i].src; // câu mô hình bỏ sót: giữ nguyên lời gốc
+      paintCov();saveFilm();err=0;firstChunk=false;prefetch(video.currentTime);
+    }catch(e){err++;setBadge('Đang thử lại… '+(e.message||''),true);await waitWake(Math.min(20000,1500*err))}
+  }
+}
+
+/* ===== ⚡ Tức thời: nghe tiếng đang phát (mọi định dạng) ===== */
+let live=null;
+function startLive(){
+  stopLive();
+  if(!srv.has){setBadge('Cần máy chủ dịch (⚙️ Cài đặt)',true);return}
+  if(!ensureGraph()){setBadge('Trình duyệt không cho nghe tiếng phim này',true);return}
+  const proc=actx.createScriptProcessor(4096,1,1),mute=actx.createGain();mute.gain.value=0;
+  srcNode.connect(proc);proc.connect(mute);mute.connect(actx.destination);
+  const L={proc,mute,sr:actx.sampleRate,pcm:[],len:0,t0:0,silent:0,seq:0,next:0,results:{},prev:[],lang:S.lang||F.lang,film:F};
+  proc.onaudioprocess=e=>onPcm(L,e.inputBuffer.getChannelData(0));
+  live=L;F.cues=F.cues||[];setBadge('⚡ Tức thời: bấm ▶, giọng Việt theo sau lời gốc 3–5 giây');
+}
+function stopLive(){if(!live)return;const L=live;live=null;try{L.proc.onaudioprocess=null;srcNode.disconnect(L.proc);L.proc.disconnect();L.mute.disconnect()}catch(e){}}
+function liveReset(){if(live){live.pcm=[];live.len=0;live.results={};live.next=live.seq}}
+function onPcm(L,data){
+  if(live!==L||video.paused||video.seeking||!S.dub)return;
+  const r=L.sr/16000,n=Math.floor(data.length/r),out=new Float32Array(n);let e=0;
+  for(let k=0;k<n;k++){const a=Math.floor(k*r),b=Math.min(data.length,Math.floor((k+1)*r));let s=0;for(let j=a;j<b;j++)s+=data[j];const v=s/((b-a)||1);out[k]=v;e+=v*v}
+  const rms=Math.sqrt(e/(n||1)),start=video.currentTime-data.length/L.sr;
+  if(L.len&&Math.abs(start-(L.t0+L.len/16000))>1.2){L.pcm=[];L.len=0}
+  if(!L.len)L.t0=Math.max(0,start);
+  L.pcm.push(out);L.len+=n;L.silent=rms<0.012?L.silent+1:0;
+  const dur=L.len/16000;
+  if((dur>=2.5&&L.silent>=4)||dur>=8){const len=L.len,t0=L.t0,pcm=L.pcm;L.pcm=[];L.len=0;L.silent=0;
+    let en=0;for(const a of pcm)for(let k=0;k<a.length;k++)en+=a[k]*a[k];if(Math.sqrt(en/len)>=0.005)sendLive(L,toWav(pcm,len),t0)}
+}
+function toWav(parts,len){
+  const b=new ArrayBuffer(44+len*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+len*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,16000,true);v.setUint32(28,32000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,len*2,true);
+  let o=44;for(const a of parts)for(let k=0;k<a.length;k++){const x=Math.max(-1,Math.min(1,a[k]));v.setInt16(o,x<0?x*0x8000:x*0x7fff,true);o+=2}
+  return new Blob([b],{type:'audio/wav'});
+}
+async function sendLive(L,wav,t0){
+  const seq=L.seq++,fd=new FormData();
+  fd.append('file',wav,'clip.wav');if(L.lang)fd.append('lang',L.lang);
+  fd.append('prev',JSON.stringify(L.prev.slice(-3)));if(S.tone)fd.append('tone',S.tone);if(S.ctx.trim())fd.append('context',S.ctx.trim());
+  fd.append('session','phim:'+L.film.key);fd.append('title',L.film.name);
+  if(S.voice==='auto')fd.append('voice','auto');else if(/Neural$/.test(S.voice))fd.append('voice',S.voice);
+  let items=[];
+  try{
+    const r=await fetch(srv.base+'/api/interpret',{method:'POST',headers:srv.head(),body:fd});
+    if(!r.ok)setBadge('⚡ '+await srvErr(r),true);
+    else{const j=await r.json();if(j.language&&!L.lang){L.lang=langCode(j.language);L.film.lang=L.lang}
+      items=(j.items||[]).map(x=>({s:t0+x.start,e:t0+x.end,src:x.src,vi:(x.vi||x.src||'').trim(),tts:x.tts,
+        audio:x.audio?URL.createObjectURL(new Blob([Uint8Array.from(atob(x.audio),ch=>ch.charCodeAt(0))],{type:'audio/mpeg'})):null}));
+      setBadge(`⚡ Tức thời · trễ ~${Math.max(1,Math.round(video.currentTime-t0))} giây`)}
+  }catch(e){setBadge('⚡ Mạng chậm, đang thử tiếp…',true)}
+  if(live!==L)return;
+  L.results[seq]=items;
+  while(L.results[L.next]){const it=L.results[L.next];delete L.results[L.next];L.next++;
+    for(const x of it){L.prev.push(x.src);if(x.vi){queue.push(x);while(queue.length>3)queue.shift()}}}
+  if(!S.dub||S.voice==='off'){const x=queue[queue.length-1];if(x){renderLiveSub(x);setTimeout(()=>{if(!speaking)renderLiveSub(null)},Math.max(2500,x.vi.length*70))}queue=[]}
+  pump();
+}
+
+/* ================= Cài app (PWA) ================= */
+let deferredInstall=null;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('installBtn').classList.remove('hide')});
+$('installBtn').onclick=async()=>{if(!deferredInstall)return;deferredInstall.prompt();try{await deferredInstall.userChoice}catch(e){}deferredInstall=null;$('installBtn').classList.add('hide')};
+if(isIOS&&!standalone)$('iosHint').classList.remove('hide');
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+/* ================= Khởi động ================= */
+bindSettings();srvWarn();renderLib();
+checkHealth().then(()=>srvWarn()); // đánh thức máy chủ sớm (Render ngủ khi rảnh)
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "Xem phim lồng tiếng Việt",
+  "short_name": "Phim Việt",
+  "description": "Xem phim trên điện thoại, tự dịch và lồng tiếng Việt theo lời thoại.",
+  "id": "./phim.html",
+  "start_url": "./phim.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#0b0c10",
+  "theme_color": "#0b0c10",
+  "lang": "vi",
+  "categories": ["entertainment", "video"],
+  "icons": [
+    {"src": "icons/phim-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/phim-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icons/phim-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
