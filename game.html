@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lồng tiếng Game</title>
+<link rel="icon" href="logo.svg">
+<meta name="theme-color" content="#0e1014">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e1014;--p:#161920;--p2:#1d2129;--ln:#272c36;--tx:#eceff4;--mu:#8e97a6;--ac:#f5a524;--ac2:#ffd27a;--ok:#3ecf8e;--er:#ff6b6b}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 "Be Vietnam Pro",system-ui,sans-serif;overflow-x:hidden}
+.app{max-width:1100px;margin:0 auto;padding:14px;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px}
+@media(max-width:880px){.app{grid-template-columns:minmax(0,1fr);padding:10px}}
+.top{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px}
+.top img{width:32px;height:32px}.top a{margin-left:auto;font-size:12px;font-weight:500;color:var(--mu)}
+.card{background:var(--p);border:1px solid var(--ln);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.left{display:flex;flex-direction:column;gap:12px;min-width:0}
+.screen{position:relative;border-radius:14px;overflow:hidden;aspect-ratio:16/9;background:radial-gradient(120% 90% at 30% 20%,#2a1f3d,#0c0d12 60%),#000;display:grid;place-items:center}
+.screen .idle{color:var(--mu);text-align:center;padding:20px;max-width:440px}
+.screen .idle b{display:block;color:var(--tx);font-size:16px;margin-bottom:6px}
+.meter{position:absolute;left:12px;top:12px;display:flex;gap:8px;align-items:center;font-size:12px;color:#cfd5df;background:rgba(0,0,0,.45);padding:4px 10px;border-radius:99px}
+.meter i{display:block;width:70px;height:6px;border-radius:3px;background:#333;overflow:hidden}.meter i b{display:block;height:100%;width:0;background:var(--ok);transition:width .08s}
+.dot{width:8px;height:8px;border-radius:50%;background:#555}.dot.on{background:var(--er);box-shadow:0 0 8px var(--er)}
+.sub{position:absolute;left:4%;right:4%;bottom:8%;text-align:center;pointer-events:none}
+.subline{display:inline;font-weight:800;font-size:clamp(16px,2.6vw,30px);line-height:1.45;color:#fff;background:rgba(0,0,0,.6);padding:2px 12px;border-radius:8px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.subsrc{display:block;margin-top:6px}.subsrc span{font-size:clamp(12px,1.6vw,17px);font-weight:500;color:#d6dae2;background:rgba(0,0,0,.55);padding:1px 8px;border-radius:6px}
+.who{display:block;margin-bottom:4px}.who span{font-size:12px;font-weight:700;padding:1px 8px;border-radius:99px;color:#111}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{font:inherit;font-weight:600;border:1px solid var(--ln);background:var(--p2);color:var(--tx);border-radius:10px;padding:9px 13px;cursor:pointer}
+button:hover{border-color:#3a4150}button:disabled{opacity:.45;cursor:default}
+button.pr{background:var(--ac);border-color:var(--ac);color:#1a1000;font-weight:800;padding:11px 18px}
+button.stop{background:var(--er);border-color:var(--er);color:#1a0000}
+.st{font-size:12.5px;color:var(--mu)}.st.ok{color:var(--ok)}.st.er{color:var(--er)}.st.pf{color:var(--ac2)}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mu)}
+label.c{flex-direction:row;align-items:flex-start;gap:8px;color:var(--tx);font-size:13px}
+select,input[type=text],input[type=password],textarea{width:100%;font:inherit;font-size:13px;background:var(--p2);color:var(--tx);border:1px solid var(--ln);border-radius:9px;padding:8px}
+textarea{resize:vertical;min-height:54px}
+input[type=range]{width:100%;accent-color:var(--ac)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+details summary{cursor:pointer;color:var(--mu);font-size:13px}details[open] summary{margin-bottom:8px}
+details>div{display:flex;flex-direction:column;gap:8px}
+h3{margin:0;font-size:14px}
+.log{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto}
+.ln{background:var(--p2);border-radius:10px;padding:7px 10px;border-left:3px solid var(--c,#555)}
+.ln small{display:block;color:var(--mu);font-size:11.5px}.ln em{font-style:normal;font-size:11px;color:var(--mu);float:right}
+.hint{font-size:12.5px;color:var(--mu);line-height:1.5}.hint b{color:var(--tx)}
+.hint ol{margin:4px 0 0;padding-left:18px}
+.hide{display:none!important}
+/* Cửa sổ phụ đề cho OBS / nổi trên game */
+body.ov{background:var(--ovbg,#00ff00);overflow:hidden}
+body.ov .ovsub{position:fixed;left:3%;right:3%;bottom:var(--ovpos,10%);text-align:center}
+body.ov .subline{font-size:var(--ovsize,34px);background:var(--ovbox,rgba(0,0,0,.6))}
+body.ov .subsrc span{font-size:calc(var(--ovsize,34px)*.55)}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="left">
+    <div class="top"><img src="logo.svg" alt="">Lồng tiếng Game <a href="./">← Lồng tiếng video</a></div>
+    <div class="screen" id="screen">
+      <div class="idle" id="idle"><b>🎮 Nghe tiếng game và lồng tiếng Việt trực tiếp</b>Bấm <b>Bắt đầu</b>, chọn <b>Toàn màn hình</b> (hoặc cửa sổ game) và bật <b>Chia sẻ âm thanh hệ thống</b>. Thoại nhân vật sẽ được dịch và đọc giọng Việt sau 2–4 giây.</div>
+      <div class="meter hide" id="meter"><span class="dot" id="dot"></span><i><b id="lvl"></b></i><span id="lag">—</span></div>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="bar">
+      <button class="pr" id="go">▶ Bắt đầu lồng tiếng game</button>
+      <button id="pip" title="Cửa sổ phụ đề luôn nổi trên game (game để chế độ Cửa sổ không viền)">📌 Phụ đề nổi trên game</button>
+      <button id="pop" title="Mở cửa sổ phụ đề nền xanh để OBS bắt (Window Capture + Chroma Key)">🎥 Phụ đề cho OBS</button>
+      <span class="st" id="st"></span>
+    </div>
+    <div class="st pf" id="prof"></div>
+    <div class="card">
+      <div class="bar" style="justify-content:space-between"><h3>Lời thoại đã lồng</h3><button id="clear" style="padding:5px 10px;font-size:12px">Xoá</button></div>
+      <div class="log" id="log"><div class="hint">Chưa có câu nào.</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Thể loại game (giúp dịch đúng chất)
+      <select id="preset"></select>
+    </label>
+    <label>Bối cảnh thêm (tuỳ chọn)
+      <textarea id="ctx" placeholder="VD: nhân vật chính Lucia và Jason là cặp đôi phạm tội ở thành phố Vice City…"></textarea>
+    </label>
+    <div class="two">
+      <label>Ngôn ngữ thoại trong game
+        <select id="lang"><option value="">Tự nhận</option><option value="en">Tiếng Anh</option><option value="ja">Tiếng Nhật</option><option value="zh">Tiếng Trung</option><option value="ko">Tiếng Hàn</option></select>
+      </label>
+      <label>Giọng đọc
+        <select id="voice"><option value="auto">🎭 Tự động theo nhân vật</option><option value="vi-VN-NamMinhNeural">NamMinh (nam)</option><option value="vi-VN-HoaiMyNeural">HoaiMy (nữ)</option><option value="none">Tắt giọng — chỉ phụ đề</option></select>
+      </label>
+    </div>
+    <label><span>Âm lượng giọng Việt: <b id="volV">100%</b></span><input type="range" id="vol" min="0" max="100" value="100"></label>
+    <label><span>Tốc độ đọc: <b id="rateV">1.00×</b></span><input type="range" id="rate" min="0.9" max="1.5" step="0.05" value="1"></label>
+    <label><span>Độ nhạy nghe thoại: <b id="sensV">Vừa</b></span><input type="range" id="sens" min="1" max="5" step="1" value="3"></label>
+    <label id="sinkBox" class="hide">Phát giọng Việt ra
+      <select id="sink"><option value="">Loa mặc định</option></select>
+    </label>
+    <label class="c"><input type="checkbox" id="showSrc"> Hiện cả câu gốc dưới phụ đề</label>
+    <label class="c"><input type="checkbox" id="showWho" checked> Hiện nhãn người nói (màu theo nhân vật)</label>
+    <details>
+      <summary>Phụ đề nổi / OBS</summary>
+      <div>
+        <label><span>Cỡ chữ: <b id="ovsizeV">34px</b></span><input type="range" id="ovsize" min="18" max="64" value="34"></label>
+        <label><span>Vị trí từ đáy: <b id="ovposV">10%</b></span><input type="range" id="ovpos" min="0" max="60" value="10"></label>
+        <label>Nền cửa sổ phụ đề OBS
+          <select id="ovbg"><option value="#00ff00">Xanh lá (Chroma Key)</option><option value="#ff00ff">Hồng (Chroma Key)</option><option value="#000000">Đen</option></select>
+        </label>
+      </div>
+    </details>
+    <details id="srvBox">
+      <summary>Máy chủ (dùng chung với app Lồng tiếng video)</summary>
+      <div>
+        <label>Địa chỉ máy chủ<input type="text" id="srv" placeholder="https://longtieng-downloader.onrender.com" inputmode="url"></label>
+        <label>Mã truy cập (API_TOKEN)<input type="text" id="srvKey" autocomplete="off"></label>
+        <label>Mã Groq<input type="password" id="srvGroq" placeholder="gsk_…" autocomplete="off"></label>
+        <button id="test">Kiểm tra kết nối</button>
+        <span class="st" id="tst"></span>
+      </div>
+    </details>
+    <div class="hint">
+      <b>Cách dùng khi chơi GTA trên PC</b> (Chrome hoặc Edge trên Windows):
+      <ol>
+        <li>Mở game, để chế độ <b>Cửa sổ không viền (Borderless)</b> nếu muốn phụ đề nổi trên game.</li>
+        <li>Bấm <b>Bắt đầu</b> → chọn thẻ <b>Toàn bộ màn hình</b> → bật <b>Chia sẻ cả âm thanh hệ thống</b> → <b>Chia sẻ</b>.</li>
+        <li>Giảm âm lượng thoại / nhạc trong cài đặt game (hoặc trong Bộ trộn âm lượng Windows) để nghe rõ giọng Việt.</li>
+        <li>Khi stream: OBS bắt âm thanh máy (desktop audio) là có giọng Việt; phụ đề dùng nút <b>🎥 Phụ đề cho OBS</b>.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+<div class="ovsub hide" id="ovsub"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const bc='BroadcastChannel' in window?new BroadcastChannel('ltv-game'):null;
+const COLORS=['#f5a524','#5ab0ff','#ff6fb1','#3ecf8e','#b48cff','#ff8a4c','#7ce0e6','#e6d36c'];
+const GNAME={m:'Nam',f:'Nữ',c:'Trẻ em'};
+
+/* ===== Vẽ phụ đề (dùng chung cho trang chính, cửa sổ nổi, cửa sổ OBS) ===== */
+function paint(box,d){
+  box.textContent='';if(!d||!d.vi)return;
+  if(d.who){const w=document.createElement('span');w.className='who';const s=document.createElement('span');s.textContent=d.who;s.style.background=d.color;w.append(s);box.append(w)}
+  const a=document.createElement('span');a.className='subline';a.textContent=d.vi;box.append(a);
+  if(d.src){const m=document.createElement('span');m.className='subsrc';const s=document.createElement('span');s.textContent=d.src;m.append(s);box.append(m)}
+}
+function applyOv(root,o){const s=root.style;s.setProperty('--ovsize',o.size+'px');s.setProperty('--ovpos',o.pos+'%');s.setProperty('--ovbg',o.bg)}
+
+/* ===== Chế độ cửa sổ phụ đề OBS (game.html?overlay) ===== */
+if(new URLSearchParams(location.search).has('overlay')){
+  document.body.className='ov';$('app').remove();const box=$('ovsub');box.classList.remove('hide');
+  applyOv(document.body,LS.get('ltg_ov',{size:34,pos:10,bg:'#00ff00'}));
+  if(bc)bc.onmessage=e=>{const m=e.data||{};if(m.type==='sub')paint(box,m.d);if(m.type==='ov')applyOv(document.body,m.o)};
+  document.title='Phụ đề Lồng tiếng Game';
+}else main();
+
+function main(){
+/* ===== Thể loại game ===== */
+const PRESETS=[
+  {id:'gta',n:'GTA / hành động thế giới mở, giang hồ',ctx:'Game hành động thế giới mở kiểu GTA: giang hồ, băng đảng, cướp, cảnh sát, đường phố Mỹ, đài radio, người qua đường. Thoại đời thường, bỗ bã, nhiều tiếng lóng.',tone:'bụi bặm, đời thường kiểu giang hồ đường phố; bạn bè, đồng bọn, đối thủ xưng mày – tao; với người lạ, cảnh sát thì anh – tôi; chửi thề dịch cho có lực nhưng nhẹ hơn bản gốc; câu ngắn, gọn, có khí thế'},
+  {id:'rpg',n:'Nhập vai / phiêu lưu, fantasy',ctx:'Game nhập vai phiêu lưu, thế giới giả tưởng, nhiệm vụ, phép thuật, vua chúa, hiệp sĩ.',tone:'phong cách phim kiếm hiệp / cổ trang vừa phải: ta – ngươi với kẻ thù, huynh – đệ / chàng – nàng khi thân thiết; trang trọng khi là vua chúa'},
+  {id:'horror',n:'Kinh dị / sinh tồn',ctx:'Game kinh dị sinh tồn, không khí căng thẳng, sợ hãi.',tone:'căng thẳng, run sợ, câu ngắn ngắt quãng; giữ không khí rùng rợn'},
+  {id:'mil',n:'Bắn súng quân sự / chiến thuật',ctx:'Game bắn súng quân sự, đồng đội, mệnh lệnh chiến trường, bộ đàm.',tone:'mệnh lệnh quân đội ngắn gọn, dứt khoát; đồng đội gọi nhau bằng mật danh; thuật ngữ quân sự Việt chuẩn'},
+  {id:'sport',n:'Thể thao / đua xe',ctx:'Game thể thao hoặc đua xe có bình luận viên.',tone:'giọng bình luận viên thể thao sôi nổi, hào hứng, nhanh'},
+  {id:'story',n:'Cốt truyện điện ảnh',ctx:'Game cốt truyện kiểu phim điện ảnh, nhiều đoạn cắt cảnh.',tone:'như lồng tiếng phim điện ảnh: tự nhiên, giàu cảm xúc, xưng hô theo quan hệ nhân vật'},
+  {id:'auto',n:'Tự động nhận theo lời thoại',ctx:'',tone:''},
+];
+PRESETS.forEach(p=>$('preset').add(new Option(p.n,p.id)));
+
+/* ===== Lưu cài đặt ===== */
+const keep=(id,key,def,ev='input')=>{const e=$(id);const v=LS.get(key,def);if(e.type==='checkbox')e.checked=v;else e.value=v;e.addEventListener(ev,()=>LS.set(key,e.type==='checkbox'?e.checked:e.value.trim?e.value.trim():e.value))};
+keep('srv','ltv_srv','');keep('srvKey','ltv_srvKey','');keep('srvGroq','ltv_groq','');
+keep('preset','ltg_preset','gta','change');keep('ctx','ltg_ctx','');keep('lang','ltg_lang','','change');keep('voice','ltg_voice','auto','change');
+keep('vol','ltg_vol',100);keep('rate','ltg_rate',1);keep('sens','ltg_sens',3);keep('showSrc','ltg_src',false,'change');keep('showWho','ltg_who',true,'change');
+const ov=LS.get('ltg_ov',{size:34,pos:10,bg:'#00ff00'});$('ovsize').value=ov.size;$('ovpos').value=ov.pos;$('ovbg').value=ov.bg;
+const SENS=['','Rất thấp','Thấp','Vừa','Cao','Rất cao'];
+function labels(){$('volV').textContent=$('vol').value+'%';$('rateV').textContent=(+$('rate').value).toFixed(2)+'×';$('sensV').textContent=SENS[$('sens').value];
+  $('ovsizeV').textContent=$('ovsize').value+'px';$('ovposV').textContent=$('ovpos').value+'%';audioEl.volume=$('vol').value/100}
+['vol','rate','sens','ovsize','ovpos','ovbg'].forEach(id=>$(id).addEventListener('input',()=>{labels();if(id.startsWith('ov'))pushOv()}));
+$('ovbg').onchange=pushOv;
+function pushOv(){const o={size:+$('ovsize').value,pos:+$('ovpos').value,bg:$('ovbg').value};LS.set('ltg_ov',o);bc&&bc.postMessage({type:'ov',o});if(pipWin)applyOv(pipWin.document.body,Object.assign({},o,{bg:'#0e1014'}))}
+
+/* ===== Máy chủ ===== */
+const srvBase=()=>$('srv').value.trim().replace(/\/+$/,'').replace(/^(?!https?:\/\/)/,'https://');
+const srvHead=()=>{const h={'Content-Type':'application/json'},k=$('srvKey').value.trim(),g=$('srvGroq').value.trim();if(k)h['X-Api-Key']=k;if(g)h['X-Groq-Key']=g;return h};
+const st=(id,m,c)=>{$(id).textContent=m;$(id).className='st'+(c?' '+c:'')};
+$('test').onclick=async()=>{
+  if(!$('srv').value.trim())return st('tst','Nhập địa chỉ máy chủ trước.','er');
+  st('tst','Đang kết nối… (máy chủ đang ngủ có thể mất ~1 phút)');
+  try{const r=await fetch(srvBase()+'/api/health',{headers:srvHead()});const j=await r.json();
+    st('tst',j.director?(j.groq||$('srvGroq').value.trim()?'✓ Kết nối tốt, sẵn sàng lồng tiếng game.':'Kết nối được, nhưng chưa có mã Groq.'):'Máy chủ là bản cũ: hãy triển khai lại trên Render.',j.director&&(j.groq||$('srvGroq').value.trim())?'ok':'er')}
+  catch(e){st('tst','Không kết nối được máy chủ: '+e.message,'er')}
+};
+
+/* ===== Phát giọng Việt ===== */
+const audioEl=new Audio();try{audioEl.preservesPitch=true}catch(e){}
+labels();
+if('setSinkId' in HTMLMediaElement.prototype&&navigator.mediaDevices&&navigator.mediaDevices.enumerateDevices){
+  $('sinkBox').classList.remove('hide');
+  const fill=async()=>{try{const ds=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audiooutput'&&d.deviceId&&d.deviceId!=='default');
+    const cur=LS.get('ltg_sink','');const s=$('sink');while(s.options.length>1)s.remove(1);
+    ds.forEach((d,i)=>s.add(new Option(d.label||('Thiết bị '+(i+1)),d.deviceId)));s.value=[...s.options].some(o=>o.value===cur)?cur:'';
+    if(s.value)audioEl.setSinkId(s.value).catch(()=>{})}catch(e){}};
+  fill();navigator.mediaDevices.addEventListener&&navigator.mediaDevices.addEventListener('devicechange',fill);
+  $('sink').onchange=()=>{LS.set('ltg_sink',$('sink').value);audioEl.setSinkId($('sink').value).catch(()=>{})};
+}
+const b64url=b=>URL.createObjectURL(new Blob([Uint8Array.from(atob(b),c=>c.charCodeAt(0))],{type:'audio/mpeg'}));
+
+/* ===== Phụ đề ===== */
+let pipWin=null;
+function show(c){
+  const d=c?{vi:c.vi,src:$('showSrc').checked&&c.src!==c.vi?c.src:'',who:$('showWho').checked&&c.who?c.who:'',color:c.color}:null;
+  paint($('sub'),d);if(pipWin)paint(pipWin.document.getElementById('ovsub'),d);bc&&bc.postMessage({type:'sub',d});
+}
+$('pop').onclick=()=>{const w=window.open('game.html?overlay','ltg_overlay','width=1280,height=300');if(!w)st('st','Trình duyệt chặn cửa sổ bật lên — hãy cho phép.','er');else st('st','Trong OBS: thêm Window Capture chọn cửa sổ "Phụ đề Lồng tiếng Game", rồi thêm bộ lọc Chroma Key.','ok')};
+$('pip').onclick=async()=>{
+  if(!('documentPictureInPicture' in window)){st('st','Trình duyệt chưa hỗ trợ cửa sổ nổi. Dùng Chrome hoặc Edge bản mới trên máy tính.','er');return}
+  if(pipWin){pipWin.close();return}
+  try{
+    pipWin=await documentPictureInPicture.requestWindow({width:900,height:170});
+    [...document.styleSheets].forEach(ss=>{try{const s=pipWin.document.createElement('style');s.textContent=[...ss.cssRules].map(r=>r.cssText).join('\n');pipWin.document.head.append(s)}catch(e){const l=pipWin.document.createElement('link');l.rel='stylesheet';l.href=ss.href;pipWin.document.head.append(l)}});
+    pipWin.document.body.className='ov';const box=pipWin.document.createElement('div');box.id='ovsub';box.className='ovsub';pipWin.document.body.append(box);
+    applyOv(pipWin.document.body,{size:+$('ovsize').value,pos:8,bg:'#0e1014'});
+    pipWin.addEventListener('pagehide',()=>{pipWin=null;$('pip').textContent='📌 Phụ đề nổi trên game'});
+    $('pip').textContent='📌 Đóng phụ đề nổi';
+  }catch(e){st('st','Không mở được cửa sổ nổi: '+e.message,'er')}
+};
+
+/* ===== Nhật ký ===== */
+let lines=[];
+function addLog(c){
+  if(!lines.length)$('log').textContent='';lines.push(c);
+  const d=document.createElement('div');d.className='ln';d.style.setProperty('--c',c.color);
+  const em=document.createElement('em');em.textContent=(c.who?c.who+' · ':'')+(c.emo||'');
+  const v=document.createElement('div');v.textContent=c.vi;const s=document.createElement('small');s.textContent=c.src;
+  d.append(em,v,s);$('log').prepend(d);
+  while($('log').children.length>80)$('log').lastChild.remove();
+}
+$('clear').onclick=()=>{lines=[];$('log').innerHTML='<div class="hint">Chưa có câu nào.</div>'};
+
+/* ===== Nghe tiếng game ===== */
+let S=null; // phiên đang chạy
+const now=()=>performance.now()/1000;
+async function start(){
+  if(!$('srv').value.trim()){st('st','Cần nhập Máy chủ trước (mục Máy chủ bên phải).','er');$('srvBox').open=true;return}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){st('st','Trình duyệt này không nghe được âm thanh máy. Dùng Chrome hoặc Edge trên máy tính.','er');return}
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getDisplayMedia({
+      video:{frameRate:1,width:320,height:180},
+      audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,restrictOwnAudio:true,suppressLocalAudioPlayback:false},
+      systemAudio:'include',windowAudio:'system',selfBrowserSurface:'exclude',surfaceSwitching:'include',monitorTypeSurfaces:'include'});
+  }catch(e){st('st',e.name==='NotAllowedError'?'Bạn đã huỷ chia sẻ.':'Không chia sẻ được: '+e.message,'er');return}
+  const at=stream.getAudioTracks()[0];
+  if(!at){stream.getTracks().forEach(t=>t.stop());st('st','Chưa có âm thanh: khi chọn Toàn bộ màn hình, hãy bật ô "Chia sẻ cả âm thanh hệ thống".','er');return}
+  const set=at.getSettings?at.getSettings():{};
+  const AC=window.AudioContext||window.webkitAudioContext,actx=new AC();
+  const src=actx.createMediaStreamSource(new MediaStream([at])),proc=actx.createScriptProcessor(4096,1,1),mute=actx.createGain();mute.gain.value=0;
+  src.connect(proc);proc.connect(mute);mute.connect(actx.destination);
+  S={stream,actx,proc,sr:actx.sampleRate,isolated:set.restrictOwnAudio===true,pcm:[],len:0,t0:0,speech:0,silent:0,floor:0.01,
+     seq:0,next:0,results:{},queue:[],prev:[],lang:$('lang').value||null,sid:'game:'+Date.now(),speaking:false,playing:false,quietUntil:0,pending:0,lags:[]};
+  proc.onaudioprocess=e=>onPcm(S,e.inputBuffer.getChannelData(0));
+  stream.getTracks().forEach(t=>t.addEventListener('ended',stop));
+  $('go').textContent='■ Dừng';$('go').className='stop';$('idle').classList.add('hide');$('meter').classList.remove('hide');
+  st('st',S.isolated?'🎧 Đang nghe game…':'🎧 Đang nghe game… (trình duyệt này nghe cả giọng Việt, nên tạm ngừng nghe khi đang đọc)','ok');
+}
+function stop(){
+  if(!S)return;const X=S;S=null;
+  try{X.proc.onaudioprocess=null;X.proc.disconnect();X.actx.close()}catch(e){}
+  X.stream.getTracks().forEach(t=>t.stop());
+  try{audioEl.pause()}catch(e){}show(null);
+  $('go').textContent='▶ Bắt đầu lồng tiếng game';$('go').className='pr';$('idle').classList.remove('hide');$('meter').classList.add('hide');
+  st('st','Đã dừng.');
+}
+$('go').onclick=()=>S?stop():start();
+
+function onPcm(X,data){
+  if(S!==X)return;
+  // hạ mẫu xuống 16 kHz
+  const r=X.sr/16000,n=Math.floor(data.length/r),out=new Float32Array(n);let e=0;
+  for(let k=0;k<n;k++){const a=Math.floor(k*r),b=Math.min(data.length,Math.floor((k+1)*r));let s=0;for(let j=a;j<b;j++)s+=data[j];const v=s/((b-a)||1);out[k]=v;e+=v*v}
+  const rms=Math.sqrt(e/(n||1));
+  $('lvl').style.width=Math.min(100,rms*600)+'%';
+  // trình duyệt không tách được giọng Việt của chính app: bỏ phần đang đọc
+  if(!X.isolated&&(X.playing||now()<X.quietUntil)){X.pcm=[];X.len=0;X.speech=0;$('dot').classList.remove('on');return}
+  // ngưỡng thích nghi với nhạc nền / tiếng động của game
+  X.floor=rms<X.floor?0.7*X.floor+0.3*rms:Math.min(X.floor*1.004,0.2);
+  const k=[0,3.2,2.5,1.9,1.5,1.25][$('sens').value],isSpeech=rms>Math.max(0.006,X.floor*k);
+  $('dot').classList.toggle('on',isSpeech);
+  if(!X.len&&!isSpeech){X.pre=out;return}
+  if(!X.len){X.t0=now()-(X.pre?X.pre.length/16000:0);if(X.pre){X.pcm.push(X.pre);X.len+=X.pre.length}}
+  X.pcm.push(out);X.len+=n;
+  if(isSpeech){X.speech++;X.silent=0}else X.silent++;
+  const dur=X.len/16000;
+  if((dur>=1.6&&X.silent>=5)||dur>=7){
+    const pcm=X.pcm,len=X.len,t0=X.t0,sp=X.speech;X.pcm=[];X.len=0;X.speech=0;X.silent=0;X.pre=null;
+    if(sp>=4)send(X,pcm,len,t0);
+  }else if(X.silent>=8&&X.speech<4){X.pcm=[];X.len=0;X.speech=0;X.silent=0}
+}
+function wavB64(parts,len){
+  const u=new Uint8Array(44+len*2),v=new DataView(u.buffer),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+len*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,16000,true);v.setUint32(28,32000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,len*2,true);
+  let o=44;for(const a of parts)for(let k=0;k<a.length;k++){const x=Math.max(-1,Math.min(1,a[k]));v.setInt16(o,x<0?x*0x8000:x*0x7fff,true);o+=2}
+  let bin='';for(let i=0;i<u.length;i+=0x8000)bin+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));
+  return btoa(bin);
+}
+const LANGS={vietnamese:'vi',english:'en',chinese:'zh',japanese:'ja',korean:'ko',spanish:'es',french:'fr',german:'de',russian:'ru'};
+async function send(X,pcm,len,t0){
+  const seq=X.seq++,p=PRESETS.find(x=>x.id===$('preset').value)||PRESETS[0],extra=$('ctx').value.trim(),vo=$('voice').value;
+  X.pending++;let items=[];
+  try{
+    const r=await fetch(srvBase()+'/api/interpret.json',{method:'POST',headers:srvHead(),body:JSON.stringify({
+      audio:wavB64(pcm,len),lang:X.lang,prev:X.prev.slice(-4),session:X.sid,title:'Game: '+p.n,
+      context:[p.ctx,extra].filter(Boolean).join(' ')||undefined,tone:p.tone||undefined,voice:vo==='none'?'':vo})});
+    let j=null;try{j=await r.json()}catch(e){}
+    if(!r.ok)throw new Error((j&&j.detail)||'Lỗi máy chủ '+r.status);
+    if(j.language&&!X.lang){const l=String(j.language).toLowerCase();X.lang=LANGS[l]||(l.length<=3?l:null)}
+    if(j.profile&&j.profile.summary)st('prof','🎯 '+j.profile.summary+(!p.tone&&j.profile.tone?' · '+j.profile.tone:''),'pf');
+    items=(j.items||[]).filter(x=>!(X.lang&&X.lang!=='vi'&&x.src===x.vi&&/[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(x.src)))
+      .map(x=>{const t=x.tts||{},spk=t.spk||0;return{t0:t0+x.start,vi:x.vi||x.src,src:x.src,emo:t.emo,audio:x.audio?b64url(x.audio):null,
+        who:t.g?(GNAME[t.g]||'')+' '+(spk+1):'',color:COLORS[spk%COLORS.length]}});
+  }catch(e){if(S===X)st('st','⚠ '+e.message,'er')}
+  X.pending--;if(S!==X)return;
+  X.results[seq]=items;
+  while(X.results[X.next]){const it=X.results[X.next];delete X.results[X.next];X.next++;for(const c of it){X.prev.push(c.src);X.queue.push(c);addLog(c)}}
+  pump(X);
+}
+function pump(X){
+  if(S!==X||X.speaking)return;
+  if(!X.queue.length)return;
+  let c=X.queue.shift();
+  while(X.queue.length&&now()-c.t0>10)c=X.queue.shift(); // tụt quá xa thì bỏ bớt câu cũ
+  const lag=Math.max(0,now()-c.t0);X.lags.push(lag);if(X.lags.length>8)X.lags.shift();
+  $('lag').textContent='trễ '+(X.lags.reduce((a,b)=>a+b,0)/X.lags.length).toFixed(1)+' giây';
+  show(c);X.speaking=true;
+  let done=false;
+  const next=()=>{if(done)return;done=true;clearTimeout(wd);X.speaking=false;if(X.playing){X.playing=false;X.quietUntil=now()+0.35}
+    setTimeout(()=>{if(S===X&&!X.speaking)show(null)},1200);pump(X)};
+  const rate=Math.min(1.8,+$('rate').value*(1+0.15*X.queue.length));
+  const wd=setTimeout(next,(c.vi.length/14/rate)*1000+(c.audio?5000:1500));
+  if(c.audio&&$('voice').value!=='none'){X.playing=true;audioEl.onended=audioEl.onerror=next;audioEl.src=c.audio;audioEl.playbackRate=rate;audioEl.volume=$('vol').value/100;audioEl.play().catch(next)}
+  else{clearTimeout(wd);setTimeout(next,Math.max(1500,c.vi.length*70))}
+}
+if(!$('srv').value.trim())$('srvBox').open=true;
+}
+</script>
+</body>
+</html>

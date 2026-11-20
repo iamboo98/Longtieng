@@ -53,6 +53,17 @@ Khi dùng máy chủ, mỗi video được "đạo diễn" tự động để gi
 
 Bật / tắt: **Cài đặt → 🎭 Đạo diễn tự động** (app web), hoặc ô 🎭 trong bảng tiện ích. Chỉ áp dụng cho nhân vật để giọng **Tự động**; muốn tự chọn giọng thì chọn giọng cụ thể cho nhân vật. **Văn phong → 🎯 Tự động theo thể loại video** là mặc định; chọn văn phong khác để ghi đè.
 
+## 🎮 Lồng tiếng Game trực tiếp (game.html)
+Trang [`game.html`](game.html) nghe tiếng game đang chạy trên máy tính (ví dụ thoại tiếng Anh trong GTA), dịch đúng chất thể loại game và đọc giọng Việt ngay khi chơi, trễ khoảng 2–4 giây. Dùng được cả khi stream.
+
+- Mở `https://iamboo98.github.io/Longtieng/game.html` bằng **Chrome hoặc Edge trên Windows** (dùng chung máy chủ với app chính).
+- Bấm **Bắt đầu** → chọn **Toàn bộ màn hình** → bật **Chia sẻ cả âm thanh hệ thống**.
+- **Thể loại game**: GTA / giang hồ (xưng mày – tao, tiếng lóng), nhập vai, kinh dị, quân sự, thể thao, cốt truyện điện ảnh… quyết định văn phong dịch.
+- **Giọng tự động theo nhân vật**: nam / nữ / trẻ em và mỗi nhân vật một giọng riêng (màu riêng trên phụ đề), đọc theo cảm xúc từng câu. Có thể chọn **Tắt giọng — chỉ phụ đề**.
+- **📌 Phụ đề nổi trên game**: cửa sổ phụ đề luôn nằm trên cùng (game để chế độ Cửa sổ không viền).
+- **🎥 Phụ đề cho OBS**: cửa sổ phụ đề nền xanh → OBS thêm *Window Capture* + bộ lọc *Chroma Key*. Giọng Việt phát ra loa máy nên OBS bắt qua *Desktop Audio*; có thể chọn thiết bị phát riêng (tai nghe, cáp âm thanh ảo).
+- Trên trình duyệt chưa tách được tiếng của chính app, app tạm ngừng nghe trong lúc đang đọc giọng Việt để không tự dịch lại mình.
+
 ## 🌐 Lồng tiếng trên mọi trang web (userscript)
 Tiện ích [`userscript/longtieng-web.user.js`](userscript/longtieng-web.user.js) chạy trên mọi trang có video (Facebook, TikTok, Vimeo, Bilibili, báo điện tử, khoá học online…): nút 🎙️ hiện ở góc khi trang có video, bấm **Bắt đầu lồng tiếng** là video được nghe, dịch và đọc giọng Việt ngay khi đang xem.
 
